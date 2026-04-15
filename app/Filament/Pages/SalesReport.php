@@ -1,0 +1,183 @@
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Models\Expense;
+use App\Models\Order;
+use Filament\Pages\Page;
+use Illuminate\Support\Facades\DB;
+
+class SalesReport extends Page
+{
+    protected string $view = 'filament.pages.sales-report';
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar';
+
+    protected static ?string $navigationLabel = 'Sales Report';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Reports';
+
+    protected static ?int $navigationSort = 1;
+
+    public string $period        = 'day';
+    public int    $selectedMonth;
+    public int    $selectedYear;
+
+    public function mount(): void
+    {
+        $this->selectedMonth = (int) now()->month;
+        $this->selectedYear  = (int) now()->year;
+
+        // Staff may only view Day and Week; reset if they somehow land on a restricted period.
+        if (! auth()->user()?->is_admin && in_array($this->period, ['month', 'year'])) {
+            $this->period = 'day';
+        }
+    }
+
+    /** Whether the current user can see Month/Year tabs. */
+    public function canViewExtendedPeriods(): bool
+    {
+        return (bool) auth()->user()?->is_admin;
+    }
+
+    /** Called when Livewire sets the period property — guard against staff selecting month/year. */
+    public function updatedPeriod(string $value): void
+    {
+        if (! auth()->user()?->is_admin && in_array($value, ['month', 'year'])) {
+            $this->period = 'day';
+        }
+    }
+
+    public function previousYear(): void { $this->selectedYear--; }
+    public function nextYear(): void     { $this->selectedYear++; }
+
+    public function getPeriodLabel(): string
+    {
+        return match ($this->period) {
+            'day'   => 'Today — ' . now()->format('d M Y'),
+            'week'  => 'This Week (' . now()->startOfWeek()->format('d M') . ' – ' . now()->endOfWeek()->format('d M Y') . ')',
+            'month' => \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth)->format('F Y'),
+            'year'  => (string) $this->selectedYear,
+            default => '',
+        };
+    }
+
+    protected function dateRange(): array
+    {
+        return match ($this->period) {
+            'day'   => [now()->startOfDay(), now()->endOfDay()],
+            'week'  => [now()->copy()->startOfWeek(), now()->copy()->endOfWeek()],
+            'month' => [
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth)->startOfMonth(),
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth)->endOfMonth(),
+            ],
+            'year'  => [
+                \Carbon\Carbon::create($this->selectedYear)->startOfYear(),
+                \Carbon\Carbon::create($this->selectedYear)->endOfYear(),
+            ],
+            default => [now()->startOfDay(), now()->endOfDay()],
+        };
+    }
+
+    // Only these statuses represent confirmed, received payments.
+    private const PAID_STATUSES = ['Paid', 'Preparing', 'Ready', 'Collected'];
+
+    public function getAvailableYears(): array
+    {
+        $earliest = (int) Order::min(DB::raw('YEAR(created_at)'));
+        $current  = (int) now()->year;
+        $from     = max($earliest ?: $current, $current - 4);
+
+        return range($from, $current);
+    }
+
+    public function getSummary(): array
+    {
+        [$from, $to] = $this->dateRange();
+
+        $row = Order::whereBetween('created_at', [$from, $to])
+            ->whereIn('order_status', self::PAID_STATUSES)
+            ->select([
+                DB::raw('COUNT(*) as total_orders'),
+                DB::raw('COALESCE(SUM(total_price), 0) as total_revenue'),
+                DB::raw('COALESCE(AVG(total_price), 0) as avg_order_value'),
+                DB::raw('SUM(collected = 1) as collected_count'),
+            ])
+            ->first();
+
+        return [
+            'total_orders'    => (int)   ($row->total_orders    ?? 0),
+            'total_revenue'   => (float) ($row->total_revenue   ?? 0),
+            'avg_order_value' => (float) ($row->avg_order_value ?? 0),
+            'collected_count' => (int)   ($row->collected_count ?? 0),
+        ];
+    }
+
+    public function getPaymentBreakdown(): array
+    {
+        [$from, $to] = $this->dateRange();
+
+        return Order::whereBetween('created_at', [$from, $to])
+            ->whereIn('order_status', self::PAID_STATUSES)
+            ->select('payment_method', DB::raw('COUNT(*) as orders'), DB::raw('COALESCE(SUM(total_price), 0) as revenue'))
+            ->groupBy('payment_method')
+            ->orderByDesc('revenue')
+            ->get()
+            ->toArray();
+    }
+
+    public function getTopFlavors(): array
+    {
+        [$from, $to] = $this->dateRange();
+
+        return DB::table('order_items')
+            ->join('orders',  'order_items.order_id',  '=', 'orders.id')
+            ->join('flavors', 'order_items.flavor_id', '=', 'flavors.id')
+            ->whereBetween('orders.created_at', [$from, $to])
+            ->whereIn('orders.order_status', self::PAID_STATUSES)
+            ->select(
+                'flavors.name',
+                DB::raw('SUM(order_items.quantity) as qty'),
+                DB::raw('SUM(order_items.price * order_items.quantity) as revenue')
+            )
+            ->groupBy('flavors.id', 'flavors.name')
+            ->orderByDesc('qty')
+            ->limit(10)
+            ->get()
+            ->toArray();
+    }
+
+    public function getStatusBreakdown(): array
+    {
+        [$from, $to] = $this->dateRange();
+
+        return Order::whereBetween('created_at', [$from, $to])
+            ->select('order_status', DB::raw('COUNT(*) as count'))
+            ->groupBy('order_status')
+            ->orderByDesc('count')
+            ->get()
+            ->toArray();
+    }
+
+    public function getExpenseSummary(): array
+    {
+        [$from, $to] = $this->dateRange();
+
+        $rows = Expense::whereBetween('expense_date', [
+                $from->toDateString(),
+                $to->toDateString(),
+            ])
+            ->select('category', DB::raw('COALESCE(SUM(amount), 0) as total'))
+            ->groupBy('category')
+            ->orderByDesc('total')
+            ->get()
+            ->toArray();
+
+        $totalExpenses = array_sum(array_column($rows, 'total'));
+
+        return [
+            'rows'  => $rows,
+            'total' => (float) $totalExpenses,
+        ];
+    }
+}
