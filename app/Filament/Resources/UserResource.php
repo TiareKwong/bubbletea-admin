@@ -137,6 +137,8 @@ class UserResource extends Resource
             ])
             ->actions([
                 EditAction::make(),
+                \Filament\Actions\DeleteAction::make()
+                    ->hidden(fn (User $record) => $record->id === auth()->id()),
             ])
             ->bulkActions([]);
     }

@@ -55,19 +55,19 @@ class PushNotificationService
         ],
         'wallet_topup_approved' => [
             'en' => ['title' => 'Wallet Top-up Approved ✅', 'body' => '$#{code} has been added to your wallet!'],
-            'ki' => ['title' => 'E a Rin am Wallet ✅', 'body' => 'E a rin te $#{code} nakon am wallet!'],
+            'ki' => ['title' => 'E a Rin n am Bwauti ✅', 'body' => 'E a rin am mane ae $#{code} nakon am bwauti!'],
         ],
         'wallet_topup_rejected' => [
             'en' => ['title' => 'Wallet Top-up Rejected', 'body' => 'Your request to add $#{code} to your wallet was not approved.'],
-            'ki' => ['title' => 'E aki Rin am Wallet', 'body' => 'E aki rin am ibuobuoki ni kaboakina te $#{code} nakon am wallet.'],
+            'ki' => ['title' => 'E aki Rin n am Bwauti', 'body' => 'E aki rin am mane ae $#{code} nakon am bwauti.'],
         ],
         'change_to_wallet' => [
             'en' => ['title' => 'Change Added to Wallet ✅', 'body' => '$#{code} change has been added to your wallet!'],
-            'ki' => ['title' => 'Am Nikira e Rin nakon am Wallet ✅', 'body' => 'E a rin te $#{code} man am nikira nakon am wallet!'],
+            'ki' => ['title' => 'E a rin am nikiran nakon am bwauti ✅', 'body' => 'E a rin te $#{code} man am nikira nakon am bwauti!'],
         ],
         'wallet_payment' => [
             'en' => ['title' => 'Wallet Payment', 'body' => '$#{code} has been deducted from your wallet for your order.'],
-            'ki' => ['title' => 'Am Wallet e Kabonganaki', 'body' => 'E a kamunaaki te $#{code} man am wallet ibukin am ota.'],
+            'ki' => ['title' => 'Am Bwauti e Kabonganaki', 'body' => 'E kabonganaki $#{code} man am bwauti ibukin am ota.'],
         ],
     ];
 

@@ -142,6 +142,7 @@ class PromotionResource extends Resource
                         ->label('Free Drink Size')
                         ->options([
                             'Any'     => 'Any Size',
+                            'Small'   => 'Small Only',
                             'Regular' => 'Regular Only',
                             'Large'   => 'Large Only',
                         ])

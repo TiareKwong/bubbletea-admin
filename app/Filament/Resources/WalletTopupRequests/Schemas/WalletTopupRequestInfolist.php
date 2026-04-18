@@ -46,11 +46,13 @@ class WalletTopupRequestInfolist
 
                         TextEntry::make('created_at')
                             ->label('Requested At')
-                            ->dateTime('d M Y, h:i A'),
+                            ->dateTime('d M Y, h:i A')
+                            ->timezone('Pacific/Tarawa'),
 
                         TextEntry::make('updated_at')
                             ->label('Last Updated')
-                            ->dateTime('d M Y, h:i A'),
+                            ->dateTime('d M Y, h:i A')
+                            ->timezone('Pacific/Tarawa'),
                     ]),
             ]);
     }

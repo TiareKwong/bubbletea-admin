@@ -10,6 +10,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -18,6 +19,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Http;
 
 class CustomerResource extends Resource
 {
@@ -124,6 +126,38 @@ class CustomerResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->actions([
                 \Filament\Actions\ViewAction::make(),
+                \Filament\Actions\Action::make('sendPasswordSetup')
+                    ->label('Send Password Setup')
+                    ->icon('heroicon-o-envelope')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Send Password Setup Email')
+                    ->modalDescription(fn (User $record) => "Send a password setup link to {$record->email}. They can use this to set their own password and access their account.")
+                    ->modalSubmitActionLabel('Send Email')
+                    ->action(function (User $record) {
+                        try {
+                            $response = Http::post('https://vickysbubbletea.com/forgot-password', [
+                                'email' => $record->email,
+                            ]);
+
+                            if ($response->successful()) {
+                                Notification::make()
+                                    ->title('Password setup email sent to ' . $record->email)
+                                    ->success()
+                                    ->send();
+                            } else {
+                                Notification::make()
+                                    ->title('Failed to send email: ' . ($response->json('message') ?? 'Unknown error'))
+                                    ->danger()
+                                    ->send();
+                            }
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->title('Error: ' . $e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
             ])
             ->bulkActions([]);
     }

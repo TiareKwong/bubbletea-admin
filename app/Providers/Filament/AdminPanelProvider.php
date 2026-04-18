@@ -27,6 +27,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->passwordReset(\App\Filament\Pages\Auth\RequestPasswordReset::class)
             ->darkMode(false)
 
             // ── Branding ────────────────────────────────────────────────────

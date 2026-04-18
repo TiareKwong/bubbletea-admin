@@ -153,7 +153,7 @@ class SalesReport extends Page
             ->select(
                 'flavors.name',
                 DB::raw('SUM(order_items.quantity) as qty'),
-                DB::raw('SUM(order_items.price * order_items.quantity) as revenue')
+                DB::raw('SUM(order_items.price) as revenue')
             )
             ->groupBy('flavors.id', 'flavors.name')
             ->orderByDesc('qty')

@@ -2,10 +2,23 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 
 class WalletTopupRequest extends Model
 {
+    // MySQL TIMESTAMP columns come back as UTC strings; parse them explicitly
+    // as UTC so Filament's timezone conversion works correctly.
+    public function getCreatedAtAttribute($value): ?Carbon
+    {
+        return $value ? Carbon::parse($value, 'UTC') : null;
+    }
+
+    public function getUpdatedAtAttribute($value): ?Carbon
+    {
+        return $value ? Carbon::parse($value, 'UTC') : null;
+    }
+
     protected $fillable = [
         'user_id',
         'amount',

@@ -46,6 +46,7 @@ class WalletTopupRequestsTable
                 TextColumn::make('created_at')
                     ->label('Requested')
                     ->dateTime('d M Y, h:i A')
+                    ->timezone('Pacific/Tarawa')
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
