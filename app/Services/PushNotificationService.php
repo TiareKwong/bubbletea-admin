@@ -11,19 +11,19 @@ class PushNotificationService
     private static array $translations = [
         'payment_verified' => [
             'en' => ['title' => 'Payment Confirmed ✅', 'body' => 'Your bank transfer has been verified. Order #{code} is confirmed!'],
-            'ki' => ['title' => 'Ko rabwa n am bobwai ✅', 'body' => 'E a tia n tuoaki am IB n am ota # #{code}.'],
+            'ki' => ['title' => 'Ko rabwa n am bobwai ✅', 'body' => 'Iaon kawaina n karaoaki am ota # #{code}.'],
         ],
         'payment_confirmed' => [
             'en' => ['title' => 'Payment Confirmed ✅', 'body' => 'Payment received! Order #{code} is confirmed and being prepared.'],
-            'ki' => ['title' => 'Ko rabwa n am bobwai ✅', 'body' => 'E nang katauraoaki am ota # #{code}.'],
+            'ki' => ['title' => 'Ko rabwa n am bobwai ✅', 'body' => 'Iaon kawaina n karaoaki am ota # #{code}.'],
         ],
         'order_preparing' => [
             'en' => ['title' => 'Order Being Prepared 🧋', 'body' => 'Order #{code} is now being prepared. Ready soon!'],
-            'ki' => ['title' => 'E a katauraoaki 🧋', 'body' => 'Iaon kawaina n tauraoi am ota # #{code}.'],
+            'ki' => ['title' => 'E a karaoaki am ota 🧋', 'body' => 'Iaon kawaina n tauraoi am ota # #{code}.'],
         ],
         'order_ready' => [
             'en' => ['title' => 'Order Ready for Pickup 🎉', 'body' => 'Order #{code} is ready! Come collect your drinks.'],
-            'ki' => ['title' => 'E a tauraoi am ota 🎉', 'body' => 'Ko a kona n anaa am ota # #{code}.'],
+            'ki' => ['title' => 'E a tauraoi am ota 🎉', 'body' => 'E a tia am ota # #{code} ao n kona n anaki'],
         ],
         'order_collected' => [
             'en' => ['title' => 'Order Collected 🛍️', 'body' => 'Order #{code} has been marked as collected. Enjoy!'],
@@ -32,6 +32,42 @@ class PushNotificationService
         'order_cancelled' => [
             'en' => ['title' => 'Order Cancelled', 'body' => 'Your order #{code} has been cancelled.'],
             'ki' => ['title' => 'E a kamaunaki am ota', 'body' => 'E a tia n kamaunaki am ota # #{code}.'],
+        ],
+        'topup_approved' => [
+            'en' => ['title' => 'Points Top-up Approved ✅', 'body' => '#{code} points have been added to your account!'],
+            'ki' => ['title' => 'E a rin am bwii ✅', 'body' => '#{code} am bwii ae e a rin ngkai nakon am account!'],
+        ],
+        'topup_rejected' => [
+            'en' => ['title' => 'Points Top-up Rejected', 'body' => 'Your request to add #{code} points was not approved.'],
+            'ki' => ['title' => 'E aki rin am bwii', 'body' => 'Iai te kanganga nakon am bwii ae #{code}. E aki moa rin ngkai'],
+        ],
+        'change_to_points' => [
+            'en' => ['title' => 'Change Converted to Points ✅', 'body' => '#{code} points have been added from your change!'],
+            'ki' => ['title' => 'Bitaki am nikira nakon te bwii ✅', 'body' => 'E a tia n bitaki am nikira nakon am bwii #{code}!'],
+        ],
+        'change_points_updated' => [
+            'en' => ['title' => 'Points Updated', 'body' => 'Your change conversion has been updated to #{code} points.'],
+            'ki' => ['title' => 'Te bitaki nakon am bwii', 'body' => 'E a tia n bitaki am bwii nakon #{code}.'],
+        ],
+        'change_points_removed' => [
+            'en' => ['title' => 'Points Removed', 'body' => 'Your change conversion of #{code} points has been reversed.'],
+            'ki' => ['title' => 'E a Kamaunaki am Bwii', 'body' => 'E a kamaunaki am bwii ae #{code}.'],
+        ],
+        'wallet_topup_approved' => [
+            'en' => ['title' => 'Wallet Top-up Approved ✅', 'body' => '$#{code} has been added to your wallet!'],
+            'ki' => ['title' => 'E a Rin am Wallet ✅', 'body' => 'E a rin te $#{code} nakon am wallet!'],
+        ],
+        'wallet_topup_rejected' => [
+            'en' => ['title' => 'Wallet Top-up Rejected', 'body' => 'Your request to add $#{code} to your wallet was not approved.'],
+            'ki' => ['title' => 'E aki Rin am Wallet', 'body' => 'E aki rin am ibuobuoki ni kaboakina te $#{code} nakon am wallet.'],
+        ],
+        'change_to_wallet' => [
+            'en' => ['title' => 'Change Added to Wallet ✅', 'body' => '$#{code} change has been added to your wallet!'],
+            'ki' => ['title' => 'Am Nikira e Rin nakon am Wallet ✅', 'body' => 'E a rin te $#{code} man am nikira nakon am wallet!'],
+        ],
+        'wallet_payment' => [
+            'en' => ['title' => 'Wallet Payment', 'body' => '$#{code} has been deducted from your wallet for your order.'],
+            'ki' => ['title' => 'Am Wallet e Kabonganaki', 'body' => 'E a kamunaaki te $#{code} man am wallet ibukin am ota.'],
         ],
     ];
 

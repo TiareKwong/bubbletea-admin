@@ -64,7 +64,7 @@
             ⚠️ Back-filling a past date{{ $isAdmin ? '' : ' — admin only' }}
         </div>
         <button
-            wire:click="$set('selectedDate', '{{ now()->toDateString() }}')"
+            wire:click="$set('selectedDate', '{{ now('Pacific/Tarawa')->toDateString() }}')"
             style="background:none; border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.45rem 0.85rem; font-size:0.8rem; color:#6b7280; cursor:pointer;">
             Back to today
         </button>
@@ -132,7 +132,7 @@
                     <p style="font-size:0.8rem; color:#6b7280; margin:0 0 0.2rem;">
                         Submitted by {{ $rec['submitted_by'] }}
                         @if(! empty($rec['submitted_at']))
-                            &nbsp;·&nbsp;{{ \Carbon\Carbon::parse($rec['submitted_at'])->setTimezone(config('app.timezone'))->format('d M Y, h:i A') }}
+                            &nbsp;·&nbsp;{{ \Carbon\Carbon::parse($rec['submitted_at'], 'UTC')->setTimezone('Pacific/Tarawa')->format('d M Y, h:i A') }}
                         @endif
                     </p>
                     <p style="font-size:1rem; font-weight:600; color:#111827; margin:0;">

@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Reward;
 use App\Models\Topping;
 use App\Models\User;
+use App\Models\WalletTransaction;
 use App\Services\PushNotificationService;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -232,7 +233,6 @@ class OrderResource extends Resource
                             'Cash'          => '💵 Cash',
                             'EFTPOS'        => '💳 EFTPOS',
                             'Bank Transfer' => '🏦 Bank Transfer',
-                            'Points'        => '⭐ Points',
                         ])
                         ->required()
                         ->default('Cash'),
@@ -346,6 +346,38 @@ class OrderResource extends Resource
                     TextEntry::make('points_earned')
                         ->label('Points Earned'),
 
+                    TextEntry::make('wallet_amount_used')
+                        ->label('Wallet Used')
+                        ->money('AUD')
+                        ->placeholder('—')
+                        ->visible(fn ($record): bool => (float) $record->wallet_amount_used > 0),
+
+                    TextEntry::make('amount_to_pay')
+                        ->label('Amount to Collect from Customer')
+                        ->badge()
+                        ->getStateUsing(function ($record): string {
+                            if ($record->payment_method === 'Points') {
+                                return 'A$0.00 (Paid by Points)';
+                            }
+                            $amountDue = max(0, (float) $record->total_price - (float) $record->wallet_amount_used);
+                            $walletUsed = (float) $record->wallet_amount_used;
+                            if ($walletUsed > 0 && $amountDue > 0) {
+                                return 'A$' . number_format($amountDue, 2) . ' (' . $record->payment_method . ')';
+                            }
+                            if ($walletUsed > 0 && $amountDue == 0) {
+                                return 'A$0.00 (Fully paid by Wallet)';
+                            }
+                            return 'A$' . number_format($amountDue, 2);
+                        })
+                        ->color(function ($record): string {
+                            if ($record->payment_method === 'Points') return 'gray';
+                            $amountDue  = max(0, (float) $record->total_price - (float) $record->wallet_amount_used);
+                            if ($amountDue == 0) return 'success';
+                            $unpaid = ! in_array($record->order_status, ['Paid', 'Preparing', 'Ready', 'Collected', 'Cancelled']);
+                            return $unpaid ? 'danger' : 'gray';
+                        })
+                        ->columnSpanFull(),
+
                     TextEntry::make('collected')
                         ->label('Collected')
                         ->formatStateUsing(fn (bool $state): string => $state ? 'Yes' : 'No')
@@ -354,7 +386,11 @@ class OrderResource extends Resource
 
                     TextEntry::make('created_at')
                         ->label('Placed At')
-                        ->dateTime(),
+                        ->formatStateUsing(fn ($state) => $state
+                            ? \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $state->format('Y-m-d H:i:s'), 'UTC')
+                                ->setTimezone('Pacific/Tarawa')
+                                ->format('d M Y, h:i A')
+                            : '—'),
 
                     TextEntry::make('updated_by')
                         ->label('Last Updated By')
@@ -503,7 +539,7 @@ class OrderResource extends Resource
     {
         return $table
             ->searchOnBlur()
-            ->poll('15s')
+            ->poll('30s')
             ->columns([
                 TextColumn::make('order_code')
                     ->label('Code')
@@ -518,8 +554,7 @@ class OrderResource extends Resource
                         'user',
                         fn (Builder $q) => $q->where('first_name', 'like', "%{$search}%")
                                              ->orWhere('last_name', 'like', "%{$search}%")
-                    ))
-                    ->sortable(),
+                    )),
 
                 TextColumn::make('total_price')
                     ->label('Total')
@@ -559,7 +594,11 @@ class OrderResource extends Resource
 
                 TextColumn::make('created_at')
                     ->label('Placed')
-                    ->dateTime()
+                    ->formatStateUsing(fn ($state) => $state
+                        ? \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $state->format('Y-m-d H:i:s'), 'UTC')
+                            ->setTimezone('Pacific/Tarawa')
+                            ->format('d M Y, h:i A')
+                        : '—')
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
@@ -585,6 +624,7 @@ class OrderResource extends Resource
                         'Bank Transfer' => 'Bank Transfer',
                         'Points'        => 'Points',
                         'EFTPOS'        => 'EFTPOS',
+                        'Wallet'        => 'Wallet',
                     ]),
 
                 SelectFilter::make('collected')
@@ -615,6 +655,7 @@ class OrderResource extends Resource
                     ->modalHeading('Verify & Mark Paid')
                     ->modalDescription('Confirm the bank transfer has been received and mark this order as paid?')
                     ->action(function (Order $record): void {
+                        $staffName    = auth()->user()->getFilamentName();
                         $pointsEarned = (int) round((float) $record->total_price * 10);
 
                         $reward = Reward::firstOrCreate(
@@ -624,9 +665,27 @@ class OrderResource extends Resource
                         $reward->points += $pointsEarned;
                         $reward->save();
 
+                        // Deduct wallet amount if used (guard against double-deduction)
+                        $walletUsed = (float) $record->wallet_amount_used;
+                        $alreadyDeducted = $walletUsed > 0 && WalletTransaction::where('reference', $record->order_code)
+                            ->where('user_id', $record->user_id)
+                            ->where('type', 'payment')
+                            ->exists();
+                        if ($walletUsed > 0 && $record->user_id && ! $alreadyDeducted) {
+                            $record->user->decrement('wallet_balance', $walletUsed);
+                            WalletTransaction::create([
+                                'user_id'     => $record->user_id,
+                                'type'        => 'payment',
+                                'amount'      => $walletUsed,
+                                'reference'   => $record->order_code,
+                                'notes'       => 'Wallet payment for order #' . $record->order_code,
+                                'actioned_by' => $staffName,
+                            ]);
+                        }
+
                         $record->order_status  = 'Paid';
                         $record->points_earned = $pointsEarned;
-                        $record->updated_by    = auth()->user()->getFilamentName();
+                        $record->updated_by    = $staffName;
                         $record->save();
 
                         PushNotificationService::sendLocalized($record->user_id, 'payment_verified', $record->order_code);
@@ -647,7 +706,8 @@ class OrderResource extends Resource
                     ->modalHeading('Confirm Payment')
                     ->modalDescription('Mark this order as paid? This cannot be undone.')
                     ->action(function (Order $record): void {
-                        $reward = Reward::firstOrCreate(
+                        $staffName = auth()->user()->getFilamentName();
+                        $reward    = Reward::firstOrCreate(
                             ['user_id' => $record->user_id],
                             ['points'  => 0]
                         );
@@ -658,16 +718,34 @@ class OrderResource extends Resource
                             // Deduct the points used to pay for this order
                             $reward->points = max(0, $reward->points - (int) $record->points_used);
                         } else {
-                            // Earn points for cash / EFTPOS payments
+                            // Earn points for cash / EFTPOS / wallet payments
                             $pointsEarned   = (int) round((float) $record->total_price * 10);
                             $reward->points += $pointsEarned;
                         }
 
                         $reward->save();
 
+                        // Deduct wallet amount if used (guard against double-deduction)
+                        $walletUsed = (float) $record->wallet_amount_used;
+                        $alreadyDeducted = $walletUsed > 0 && WalletTransaction::where('reference', $record->order_code)
+                            ->where('user_id', $record->user_id)
+                            ->where('type', 'payment')
+                            ->exists();
+                        if ($walletUsed > 0 && $record->user_id && ! $alreadyDeducted) {
+                            $record->user->decrement('wallet_balance', $walletUsed);
+                            WalletTransaction::create([
+                                'user_id'     => $record->user_id,
+                                'type'        => 'payment',
+                                'amount'      => $walletUsed,
+                                'reference'   => $record->order_code,
+                                'notes'       => 'Wallet payment for order #' . $record->order_code,
+                                'actioned_by' => $staffName,
+                            ]);
+                        }
+
                         $record->order_status  = 'Paid';
                         $record->points_earned = $pointsEarned;
-                        $record->updated_by    = auth()->user()->getFilamentName();
+                        $record->updated_by    = $staffName;
                         $record->save();
 
                         PushNotificationService::sendLocalized($record->user_id, 'payment_confirmed', $record->order_code);
@@ -738,6 +816,7 @@ class OrderResource extends Resource
                     ->modalHeading('Cancel Order')
                     ->modalDescription('Are you sure you want to cancel this order? Any points changes from this order will be reversed.')
                     ->action(function (Order $record): void {
+                        $staffName   = auth()->user()->getFilamentName();
                         // Reverse points only if the order was already paid
                         $alreadyPaid = in_array($record->order_status, ['Paid', 'Preparing', 'Ready']);
 
@@ -756,10 +835,25 @@ class OrderResource extends Resource
                             }
 
                             $reward->save();
+
+                            // Refund wallet amount if it was used
+                            $walletUsed = (float) $record->wallet_amount_used;
+                            if ($walletUsed > 0 && $record->user_id) {
+                                $record->user->increment('wallet_balance', $walletUsed);
+                                WalletTransaction::create([
+                                    'user_id'     => $record->user_id,
+                                    'type'        => 'refund',
+                                    'amount'      => $walletUsed,
+                                    'reference'   => $record->order_code,
+                                    'notes'       => 'Refund for cancelled order #' . $record->order_code,
+                                    'actioned_by' => $staffName,
+                                ]);
+                            }
                         }
 
-                        $record->order_status = 'Cancelled';
-                        $record->updated_by   = auth()->user()->getFilamentName();
+                        $record->order_status  = 'Cancelled';
+                        $record->points_earned = 0;
+                        $record->updated_by    = $staffName;
                         $record->save();
 
                         PushNotificationService::sendLocalized($record->user_id, 'order_cancelled', $record->order_code);

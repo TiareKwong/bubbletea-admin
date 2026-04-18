@@ -4,8 +4,10 @@ namespace App\Filament\Resources\OrderResource\Pages;
 
 use App\Filament\Resources\OrderResource;
 use App\Models\Order;
+use App\Models\Reward;
 use App\Models\Topping;
 use App\Models\User;
+use App\Models\WalletTransaction;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Hash;
@@ -20,6 +22,9 @@ class CreateOrder extends CreateRecord
      * persisted to order_items in afterCreate().
      */
     private array $pendingItems = [];
+
+    /** Wallet amount to record as a transaction after the order is created. */
+    private float $pendingWalletAmount = 0.0;
 
     protected function getHeaderActions(): array
     {
@@ -103,20 +108,44 @@ class CreateOrder extends CreateRecord
 
         // ── 3. Determine initial order status ────────────────────────────────
         $data['order_status'] = match ($data['payment_method']) {
-            'Cash', 'EFTPOS' => 'Paid',
-            'Bank Transfer'  => 'Payment Verification',
-            'Points'         => 'Points Verification',
-            default          => 'Pending Payment',
+            'Cash', 'EFTPOS', 'Wallet' => 'Paid',
+            'Bank Transfer'            => 'Payment Verification',
+            'Points'                   => 'Points Verification',
+            default                    => 'Pending Payment',
         };
 
         // ── 4. Financials and metadata ───────────────────────────────────────
         $data['total_price']     = round($totalPrice, 2);
-        $data['points_earned']   = $isGuest ? 0 : (int) floor($totalPrice);
         $data['points_used']     = 0;
         $data['reward_redeemed'] = false;
         $data['collected']       = false;
         $data['order_code']      = Order::generateCode();
         $data['updated_by']      = auth()->user()->getFilamentName();
+
+        $pointsEarned = 0;
+        if (! $isGuest && $data['payment_method'] !== 'Points') {
+            $pointsEarned = (int) round($totalPrice * 10);
+            $reward = Reward::firstOrCreate(
+                ['user_id' => $data['user_id']],
+                ['points'  => 0]
+            );
+            $reward->points += $pointsEarned;
+            $reward->save();
+        }
+        $data['points_earned'] = $pointsEarned;
+
+        // ── 5. Wallet: deduct balance and record transaction ─────────────────
+        if ($data['payment_method'] === 'Wallet' && ! $isGuest) {
+            $walletAmount = round($totalPrice, 2);
+            $data['wallet_amount_used'] = $walletAmount;
+
+            $user = User::find($data['user_id']);
+            if ($user) {
+                $user->decrement('wallet_balance', $walletAmount);
+                // Transaction will be recorded in afterCreate once order_code is set
+                $this->pendingWalletAmount = $walletAmount;
+            }
+        }
 
         return $data;
     }
@@ -125,6 +154,17 @@ class CreateOrder extends CreateRecord
     {
         foreach ($this->pendingItems as $item) {
             $this->record->orderItems()->create($item);
+        }
+
+        if ($this->pendingWalletAmount > 0) {
+            WalletTransaction::create([
+                'user_id'     => $this->record->user_id,
+                'type'        => 'payment',
+                'amount'      => $this->pendingWalletAmount,
+                'reference'   => $this->record->order_code,
+                'notes'       => 'Wallet payment for order #' . $this->record->order_code,
+                'actioned_by' => auth()->user()->getFilamentName(),
+            ]);
         }
     }
 

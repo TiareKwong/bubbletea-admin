@@ -35,9 +35,11 @@ class CashReconciliation extends Page
 
     private const METHODS = ['Cash', 'EFTPOS', 'Bank Transfer'];
 
+    private const TZ_OFFSET = '+12:00'; // Pacific/Tarawa
+
     public function mount(): void
     {
-        $this->selectedDate = now()->toDateString();
+        $this->selectedDate = now('Pacific/Tarawa')->toDateString();
         $this->checkMissingDates();
     }
 
@@ -50,21 +52,20 @@ class CashReconciliation extends Page
 
     public function getAvailableDates(): array
     {
-        // All distinct dates (by updated_at) that have reconcilable orders, up to today.
-        $dates = Order::whereDate('updated_at', '<=', now()->toDateString())
+        $today = now('Pacific/Tarawa')->toDateString();
+
+        $dates = Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) <= ?", [$today])
             ->whereIn('payment_method', self::METHODS)
             ->where(function ($q) {
                 $q->whereIn('order_status', ['Paid'])->orWhere('collected', true);
             })
-            ->selectRaw('DATE(updated_at) as order_date')
+            ->selectRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) as order_date")
             ->groupBy('order_date')
             ->orderByDesc('order_date')
             ->pluck('order_date')
             ->map(fn ($d) => (string) $d)
             ->toArray();
 
-        // Always include today even if there are no orders yet.
-        $today = now()->toDateString();
         if (! in_array($today, $dates)) {
             array_unshift($dates, $today);
         }
@@ -74,12 +75,12 @@ class CashReconciliation extends Page
 
     public function isBackfill(): bool
     {
-        return $this->selectedDate < now()->toDateString();
+        return $this->selectedDate < now('Pacific/Tarawa')->toDateString();
     }
 
     public function getMethodTotals(): array
     {
-        $rows = Order::whereDate('updated_at', $this->selectedDate)
+        $rows = Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) = ?", [$this->selectedDate])
             ->whereIn('payment_method', self::METHODS)
             ->where(function ($q) {
                 $q->whereIn('order_status', ['Paid'])->orWhere('collected', true);
@@ -112,17 +113,17 @@ class CashReconciliation extends Page
 
     public function checkMissingDates(): void
     {
-        $from = now()->subDays(30)->toDateString();
-        $yesterday = now()->subDay()->toDateString();
+        $from      = now('Pacific/Tarawa')->subDays(30)->toDateString();
+        $yesterday = now('Pacific/Tarawa')->subDay()->toDateString();
 
         // Query 1: all (date, method) pairs that had orders in the last 30 days.
-        $orderPairs = Order::whereDate('updated_at', '>=', $from)
-            ->whereDate('updated_at', '<=', $yesterday)
+        $orderPairs = Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) >= ?", [$from])
+            ->whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) <= ?", [$yesterday])
             ->whereIn('payment_method', self::METHODS)
             ->where(function ($q) {
                 $q->whereIn('order_status', ['Paid'])->orWhere('collected', true);
             })
-            ->selectRaw('DATE(updated_at) as d, payment_method as m')
+            ->selectRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) as d, payment_method as m")
             ->groupBy('d', 'm')
             ->get()
             ->map(fn ($r) => $r->d . '|' . $r->m)
@@ -183,7 +184,7 @@ class CashReconciliation extends Page
             'difference'          => $actual - $expected,
             'notes'               => $this->notes[$method] ?: null,
             'submitted_by'        => auth()->user()->getFilamentName(),
-            'submitted_at'        => now(),
+            'submitted_at'        => now('UTC'),
         ]);
 
         $this->actualAmounts[$method] = '';

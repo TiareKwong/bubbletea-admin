@@ -62,8 +62,8 @@
             @foreach($months as $i => $m)
                 @php
                     $monthNum  = $i + 1;
-                    $isFuture  = $selectedYear > now()->year
-                                 || ($selectedYear === now()->year && $monthNum > now()->month);
+                    $isFuture  = $selectedYear > now('Pacific/Tarawa')->year
+                                 || ($selectedYear === now('Pacific/Tarawa')->year && $monthNum > now('Pacific/Tarawa')->month);
                     $isActive  = $selectedMonth === $monthNum && ! $isFuture;
                 @endphp
                 <button

@@ -25,8 +25,8 @@ class SalesReport extends Page
 
     public function mount(): void
     {
-        $this->selectedMonth = (int) now()->month;
-        $this->selectedYear  = (int) now()->year;
+        $this->selectedMonth = (int) now('Pacific/Tarawa')->month;
+        $this->selectedYear  = (int) now('Pacific/Tarawa')->year;
 
         // Staff may only view Day and Week; reset if they somehow land on a restricted period.
         if (! auth()->user()?->is_admin && in_array($this->period, ['month', 'year'])) {
@@ -53,9 +53,11 @@ class SalesReport extends Page
 
     public function getPeriodLabel(): string
     {
+        $tz = 'Pacific/Tarawa';
+
         return match ($this->period) {
-            'day'   => 'Today — ' . now()->format('d M Y'),
-            'week'  => 'This Week (' . now()->startOfWeek()->format('d M') . ' – ' . now()->endOfWeek()->format('d M Y') . ')',
+            'day'   => 'Today — ' . now($tz)->format('d M Y'),
+            'week'  => 'This Week (' . now($tz)->copy()->startOfWeek()->format('d M') . ' – ' . now($tz)->copy()->endOfWeek()->format('d M Y') . ')',
             'month' => \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth)->format('F Y'),
             'year'  => (string) $this->selectedYear,
             default => '',
@@ -64,18 +66,31 @@ class SalesReport extends Page
 
     protected function dateRange(): array
     {
+        // Compute boundaries in Tarawa time, then convert to UTC so they match
+        // the UTC-stored created_at values in the database.
+        $tz = 'Pacific/Tarawa';
+
         return match ($this->period) {
-            'day'   => [now()->startOfDay(), now()->endOfDay()],
-            'week'  => [now()->copy()->startOfWeek(), now()->copy()->endOfWeek()],
+            'day'   => [
+                now($tz)->startOfDay()->utc(),
+                now($tz)->endOfDay()->utc(),
+            ],
+            'week'  => [
+                now($tz)->copy()->startOfWeek()->utc(),
+                now($tz)->copy()->endOfWeek()->utc(),
+            ],
             'month' => [
-                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth)->startOfMonth(),
-                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth)->endOfMonth(),
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth, 1, 0, 0, 0, $tz)->startOfMonth()->utc(),
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth, 1, 0, 0, 0, $tz)->endOfMonth()->utc(),
             ],
             'year'  => [
-                \Carbon\Carbon::create($this->selectedYear)->startOfYear(),
-                \Carbon\Carbon::create($this->selectedYear)->endOfYear(),
+                \Carbon\Carbon::create($this->selectedYear, 1, 1, 0, 0, 0, $tz)->startOfYear()->utc(),
+                \Carbon\Carbon::create($this->selectedYear, 1, 1, 0, 0, 0, $tz)->endOfYear()->utc(),
             ],
-            default => [now()->startOfDay(), now()->endOfDay()],
+            default => [
+                now($tz)->startOfDay()->utc(),
+                now($tz)->endOfDay()->utc(),
+            ],
         };
     }
 
@@ -85,7 +100,7 @@ class SalesReport extends Page
     public function getAvailableYears(): array
     {
         $earliest = (int) Order::min(DB::raw('YEAR(created_at)'));
-        $current  = (int) now()->year;
+        $current  = (int) now('Pacific/Tarawa')->year;
         $from     = max($earliest ?: $current, $current - 4);
 
         return range($from, $current);
@@ -161,11 +176,25 @@ class SalesReport extends Page
 
     public function getExpenseSummary(): array
     {
-        [$from, $to] = $this->dateRange();
+        $tz = 'Pacific/Tarawa';
+
+        [$expenseFrom, $expenseTo] = match ($this->period) {
+            'day'   => [now($tz)->toDateString(), now($tz)->toDateString()],
+            'week'  => [now($tz)->copy()->startOfWeek()->toDateString(), now($tz)->copy()->endOfWeek()->toDateString()],
+            'month' => [
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth, 1, 0, 0, 0, $tz)->startOfMonth()->toDateString(),
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth, 1, 0, 0, 0, $tz)->endOfMonth()->toDateString(),
+            ],
+            'year'  => [
+                \Carbon\Carbon::create($this->selectedYear, 1, 1, 0, 0, 0, $tz)->startOfYear()->toDateString(),
+                \Carbon\Carbon::create($this->selectedYear, 1, 1, 0, 0, 0, $tz)->endOfYear()->toDateString(),
+            ],
+            default => [now($tz)->toDateString(), now($tz)->toDateString()],
+        };
 
         $rows = Expense::whereBetween('expense_date', [
-                $from->toDateString(),
-                $to->toDateString(),
+                $expenseFrom,
+                $expenseTo,
             ])
             ->select('category', DB::raw('COALESCE(SUM(amount), 0) as total'))
             ->groupBy('category')

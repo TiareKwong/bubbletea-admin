@@ -29,6 +29,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         'is_verified',
         'verification_token',
         'locale',
+        'wallet_balance',
     ];
 
     protected $hidden = [

@@ -26,12 +26,14 @@ class Order extends Model
         'discount_applied',
         'promo_title',
         'free_items',
+        'wallet_amount_used',
     ];
 
     protected function casts(): array
     {
         return [
-            'total_price'      => 'decimal:2',
+            'total_price'        => 'decimal:2',
+            'wallet_amount_used' => 'decimal:2',
             'discount_applied' => 'decimal:2',
             'free_items'       => 'array',
             'reward_redeemed'  => 'boolean',

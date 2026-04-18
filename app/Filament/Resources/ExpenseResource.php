@@ -60,8 +60,8 @@ class ExpenseResource extends Resource
             DatePicker::make('expense_date')
                 ->label('Date of purchase')
                 ->required()
-                ->default(now()->toDateString())
-                ->maxDate(now()->toDateString()),
+                ->default(now('Pacific/Tarawa')->toDateString())
+                ->maxDate(now('Pacific/Tarawa')->toDateString()),
 
             Textarea::make('notes')
                 ->label('Notes (optional)')
