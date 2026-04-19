@@ -15,6 +15,7 @@ class CashReconciliation extends Model
         'notes',
         'submitted_by',
         'submitted_at',
+        'branch_id',
     ];
 
     protected function casts(): array

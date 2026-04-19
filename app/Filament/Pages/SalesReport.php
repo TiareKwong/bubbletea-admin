@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\Expense;
 use App\Models\Order;
+use App\Services\BranchContext;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 
@@ -97,6 +98,17 @@ class SalesReport extends Page
     // Only these statuses represent confirmed, received payments.
     private const PAID_STATUSES = ['Paid', 'Preparing', 'Ready', 'Collected'];
 
+    private function branchId(): ?int
+    {
+        return app(BranchContext::class)->getId();
+    }
+
+    private function scopeOrders($query)
+    {
+        $id = $this->branchId();
+        return $id ? $query->where('orders.branch_id', $id) : $query;
+    }
+
     public function getAvailableYears(): array
     {
         $earliest = (int) Order::min(DB::raw('YEAR(created_at)'));
@@ -110,7 +122,7 @@ class SalesReport extends Page
     {
         [$from, $to] = $this->dateRange();
 
-        $row = Order::whereBetween('created_at', [$from, $to])
+        $row = $this->scopeOrders(Order::whereBetween('created_at', [$from, $to]))
             ->whereIn('order_status', self::PAID_STATUSES)
             ->select([
                 DB::raw('COUNT(*) as total_orders'),
@@ -132,7 +144,7 @@ class SalesReport extends Page
     {
         [$from, $to] = $this->dateRange();
 
-        return Order::whereBetween('created_at', [$from, $to])
+        return $this->scopeOrders(Order::whereBetween('created_at', [$from, $to]))
             ->whereIn('order_status', self::PAID_STATUSES)
             ->select('payment_method', DB::raw('COUNT(*) as orders'), DB::raw('COALESCE(SUM(total_price), 0) as revenue'))
             ->groupBy('payment_method')
@@ -145,11 +157,18 @@ class SalesReport extends Page
     {
         [$from, $to] = $this->dateRange();
 
-        return DB::table('order_items')
+        $q = DB::table('order_items')
             ->join('orders',  'order_items.order_id',  '=', 'orders.id')
             ->join('flavors', 'order_items.flavor_id', '=', 'flavors.id')
             ->whereBetween('orders.created_at', [$from, $to])
-            ->whereIn('orders.order_status', self::PAID_STATUSES)
+            ->whereIn('orders.order_status', self::PAID_STATUSES);
+
+        $branchId = $this->branchId();
+        if ($branchId) {
+            $q->where('orders.branch_id', $branchId);
+        }
+
+        return $q
             ->select(
                 'flavors.name',
                 DB::raw('SUM(order_items.quantity) as qty'),
@@ -166,7 +185,7 @@ class SalesReport extends Page
     {
         [$from, $to] = $this->dateRange();
 
-        return Order::whereBetween('created_at', [$from, $to])
+        return $this->scopeOrders(Order::whereBetween('created_at', [$from, $to]))
             ->select('order_status', DB::raw('COUNT(*) as count'))
             ->groupBy('order_status')
             ->orderByDesc('count')
@@ -192,10 +211,13 @@ class SalesReport extends Page
             default => [now($tz)->toDateString(), now($tz)->toDateString()],
         };
 
-        $rows = Expense::whereBetween('expense_date', [
-                $expenseFrom,
-                $expenseTo,
-            ])
+        $expenseQuery = Expense::whereBetween('expense_date', [$expenseFrom, $expenseTo]);
+        $branchId = $this->branchId();
+        if ($branchId) {
+            $expenseQuery->where('branch_id', $branchId);
+        }
+
+        $rows = $expenseQuery
             ->select('category', DB::raw('COALESCE(SUM(amount), 0) as total'))
             ->groupBy('category')
             ->orderByDesc('total')

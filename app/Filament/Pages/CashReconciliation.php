@@ -6,6 +6,7 @@ use App\Models\CashReconciliation as ReconciliationModel;
 use App\Models\Order;
 use App\Models\WalletTopupRequest;
 use App\Models\WalletTransaction;
+use App\Services\BranchContext;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 
@@ -97,11 +98,28 @@ class CashReconciliation extends Page
         $this->checkMissingDates();
     }
 
+    private function branchId(): ?int
+    {
+        return app(BranchContext::class)->getId();
+    }
+
+    private function scopeOrderQuery($query)
+    {
+        $id = $this->branchId();
+        return $id ? $query->where('branch_id', $id) : $query;
+    }
+
+    private function scopeReconQuery($query)
+    {
+        $id = $this->branchId();
+        return $id ? $query->where('branch_id', $id) : $query;
+    }
+
     public function getAvailableDates(): array
     {
         $today = now('Pacific/Tarawa')->toDateString();
 
-        $dates = Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) <= ?", [$today])
+        $dates = $this->scopeOrderQuery(Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) <= ?", [$today]))
             ->whereIn('payment_method', self::METHODS)
             ->where(function ($q) {
                 $q->whereIn('order_status', ['Paid'])->orWhere('collected', true);
@@ -127,8 +145,8 @@ class CashReconciliation extends Page
 
     public function getMethodTotals(): array
     {
-        // 1. Drink order totals per payment method
-        $orderRows = Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) = ?", [$this->selectedDate])
+        // 1. Order totals per payment method
+        $orderRows = $this->scopeOrderQuery(Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) = ?", [$this->selectedDate]))
             ->whereIn('payment_method', self::METHODS)
             ->where(function ($q) {
                 $q->whereIn('order_status', ['Paid'])->orWhere('collected', true);
@@ -175,7 +193,7 @@ class CashReconciliation extends Page
 
     public function getSelectedDateReconciliations(): array
     {
-        return ReconciliationModel::whereDate('reconciliation_date', $this->selectedDate)
+        return $this->scopeReconQuery(ReconciliationModel::whereDate('reconciliation_date', $this->selectedDate))
             ->orderBy('submitted_at', 'asc')
             ->get()
             ->groupBy('payment_method')
@@ -191,7 +209,7 @@ class CashReconciliation extends Page
         $yesterday = now('Pacific/Tarawa')->subDay()->toDateString();
 
         // Query 1: all (date, method) pairs that had orders in the last 30 days.
-        $orderPairs = Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) >= ?", [$from])
+        $orderPairs = $this->scopeOrderQuery(Order::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) >= ?", [$from]))
             ->whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) <= ?", [$yesterday])
             ->whereIn('payment_method', self::METHODS)
             ->where(function ($q) {
@@ -209,7 +227,7 @@ class CashReconciliation extends Page
         }
 
         // Query 2: all (date, method) pairs already reconciled in the same window.
-        $reconciledPairs = ReconciliationModel::whereDate('reconciliation_date', '>=', $from)
+        $reconciledPairs = $this->scopeReconQuery(ReconciliationModel::whereDate('reconciliation_date', '>=', $from))
             ->whereDate('reconciliation_date', '<=', $yesterday)
             ->selectRaw('DATE(reconciliation_date) as d, payment_method as m')
             ->get()
@@ -242,7 +260,7 @@ class CashReconciliation extends Page
 
         $actual          = (float) str_replace(',', '', $this->actualAmounts[$method] ?? '0');
         $totalExpected   = $this->getMethodTotals()[$method]['expected'];
-        $alreadyActual   = (float) ReconciliationModel::whereDate('reconciliation_date', $this->selectedDate)
+        $alreadyActual   = (float) $this->scopeReconQuery(ReconciliationModel::whereDate('reconciliation_date', $this->selectedDate))
             ->where('payment_method', $method)
             ->sum('actual_cash');
         $residualExpected = $totalExpected - $alreadyActual;
@@ -256,6 +274,7 @@ class CashReconciliation extends Page
             'notes'               => $this->notes[$method] ?: null,
             'submitted_by'        => auth()->user()->getFilamentName(),
             'submitted_at'        => now('UTC'),
+            'branch_id'           => $this->branchId(),
         ]);
 
         $this->actualAmounts[$method] = '';

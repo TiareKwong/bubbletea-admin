@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Flavor extends Model
 {
@@ -31,5 +32,10 @@ class Flavor extends Model
             'large_price'   => 'decimal:2',
             'created_at'    => 'datetime',
         ];
+    }
+
+    public function branches(): BelongsToMany
+    {
+        return $this->belongsToMany(Branch::class, 'branch_flavor');
     }
 }

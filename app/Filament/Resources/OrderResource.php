@@ -222,6 +222,18 @@ class OrderResource extends Resource
                 ]),
 
             // ── Step 3: Payment ──────────────────────────────────────────────
+            Section::make('Step 2b — Branch')
+                ->description('Which branch is this order for?')
+                ->icon('heroicon-o-map-pin')
+                ->schema([
+                    Select::make('branch_id')
+                        ->label('Branch')
+                        ->relationship('branch', 'name', fn ($query) => $query->where('is_active', true))
+                        ->default(fn () => app(\App\Services\BranchContext::class)->getId())
+                        ->searchable()
+                        ->preload(),
+                ]),
+
             Section::make('Step 3 — Payment')
                 ->description('Select how the customer is paying. Only enter a reference for Bank Transfer.')
                 ->icon('heroicon-o-banknotes')
@@ -603,6 +615,12 @@ class OrderResource extends Resource
                     ->trueColor('success')
                     ->falseColor('gray'),
 
+                TextColumn::make('branch.name')
+                    ->label('Branch')
+                    ->placeholder('—')
+                    ->badge()
+                    ->color('gray'),
+
                 TextColumn::make('created_at')
                     ->label('Placed')
                     ->formatStateUsing(fn ($state) => $state
@@ -646,6 +664,12 @@ class OrderResource extends Resource
                         '1' => 'Collected',
                         '0' => 'Not Yet Collected',
                     ]),
+
+                SelectFilter::make('branch_id')
+                    ->label('Branch')
+                    ->placeholder('All Branches')
+                    ->native(false)
+                    ->relationship('branch', 'name'),
             ], layout: FiltersLayout::AboveContent)
             ->deferFilters(false)
             ->filtersFormColumns(3)
@@ -876,7 +900,8 @@ class OrderResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::getEloquentQuery()->with('user');
+        $query = parent::getEloquentQuery()->with(['user', 'branch']);
+        return app(\App\Services\BranchContext::class)->applyTo($query);
     }
 
     public static function getPages(): array

@@ -15,6 +15,7 @@ class Expense extends Model
         'expense_date',
         'notes',
         'created_by',
+        'branch_id',
     ];
 
     protected $attributes = [

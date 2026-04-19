@@ -180,6 +180,19 @@ class FlavorResource extends Resource
                 ])
                 ->required()
                 ->default('Available'),
+
+            \Filament\Schemas\Components\Section::make('Branch Availability')
+                ->description('Leave empty = available at ALL branches. Select specific branches to restrict.')
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                    Select::make('branches')
+                        ->label('Available at Branches')
+                        ->multiple()
+                        ->relationship('branches', 'name', fn ($query) => $query->where('is_active', true))
+                        ->preload()
+                        ->placeholder('All branches (no restriction)'),
+                ]),
         ]);
     }
 
@@ -280,6 +293,24 @@ class FlavorResource extends Resource
                     ->visible(fn () => (bool) auth()->user()?->is_admin),
             ])
             ->defaultSort('name');
+    }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $query  = parent::getEloquentQuery();
+        $ctx    = app(\App\Services\BranchContext::class);
+        $branchId = $ctx->getId();
+
+        if ($branchId) {
+            // Show flavors with NO branch restrictions (available everywhere)
+            // OR those specifically assigned to this branch.
+            $query->where(function ($q) use ($branchId) {
+                $q->doesntHave('branches')
+                  ->orWhereHas('branches', fn ($bq) => $bq->where('branches.id', $branchId));
+            });
+        }
+
+        return $query;
     }
 
     public static function getPages(): array
