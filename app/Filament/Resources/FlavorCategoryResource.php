@@ -22,7 +22,9 @@ class FlavorCategoryResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-tag';
 
-    protected static ?string $navigationLabel = 'Flavor Categories';
+    protected static ?string $navigationLabel = 'Categories';
+
+    protected static ?string $pluralModelLabel = 'Categories';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Menu';
 

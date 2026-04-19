@@ -53,8 +53,8 @@ class ViewOrder extends ViewRecord
                         ]);
                     }
 
-                    // Earn points on full order amount (wallet is still money)
-                    $pointsEarned = (int) round((float) $order->total_price * 10);
+                    // Earn points only on drink/ice_cream items
+                    $pointsEarned = (int) round($order->pointableTotal() * 10);
                     $reward = Reward::firstOrCreate(
                         ['user_id' => $order->user_id],
                         ['points'  => 0]
@@ -100,8 +100,8 @@ class ViewOrder extends ViewRecord
                         // Deduct points used
                         $reward->points = max(0, $reward->points - (int) $order->points_used);
                     } else {
-                        // Earn points on full order amount (wallet counts as money)
-                        $pointsEarned   = (int) round((float) $order->total_price * 10);
+                        // Earn points only on drink/ice_cream items
+                        $pointsEarned   = (int) round($order->pointableTotal() * 10);
                         $reward->points += $pointsEarned;
                     }
 

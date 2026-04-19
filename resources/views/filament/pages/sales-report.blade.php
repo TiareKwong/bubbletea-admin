@@ -239,9 +239,9 @@
     @endif
 </x-filament::section>
 
-{{-- ── Top flavors ──────────────────────────────────────────────────── --}}
+{{-- ── Top items ──────────────────────────────────────────────────── --}}
 <x-filament::section style="margin-top:1.5rem;">
-    <x-slot name="heading">Top Flavors — {{ $this->getPeriodLabel() }}</x-slot>
+    <x-slot name="heading">Top Items — {{ $this->getPeriodLabel() }}</x-slot>
     @if(empty($flavors))
         <p style="color:#9ca3af; font-size:0.875rem;">No orders for this period.</p>
     @else

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\OrderResource\Pages;
 
 use App\Filament\Resources\OrderResource;
+use App\Models\Flavor;
 use App\Models\Order;
 use App\Models\Reward;
 use App\Models\Topping;
@@ -124,7 +125,13 @@ class CreateOrder extends CreateRecord
 
         $pointsEarned = 0;
         if (! $isGuest && $data['payment_method'] !== 'Points') {
-            $pointsEarned = (int) round($totalPrice * 10);
+            $pointableIds = Flavor::whereIn('id', collect($this->pendingItems)->pluck('flavor_id'))
+                ->whereIn('type', ['drink', 'ice_cream'])
+                ->pluck('id')->toArray();
+            $pointableTotal = collect($this->pendingItems)
+                ->filter(fn($item) => in_array($item['flavor_id'], $pointableIds))
+                ->sum(fn($item) => $item['price'] * $item['quantity']);
+            $pointsEarned = (int) round($pointableTotal * 10);
             $reward = Reward::firstOrCreate(
                 ['user_id' => $data['user_id']],
                 ['points'  => 0]

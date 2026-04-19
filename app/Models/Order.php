@@ -62,6 +62,17 @@ class Order extends Model
         });
     }
 
+    /**
+     * Total price of only drink/ice_cream items — used for loyalty points calculation.
+     */
+    public function pointableTotal(): float
+    {
+        return (float) $this->orderItems()
+            ->join('flavors', 'order_items.flavor_id', '=', 'flavors.id')
+            ->whereIn('flavors.type', ['drink', 'ice_cream'])
+            ->sum('order_items.price');
+    }
+
     public static function generateCode(): string
     {
         do {

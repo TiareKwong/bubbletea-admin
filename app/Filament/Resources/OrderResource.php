@@ -475,12 +475,12 @@ class OrderResource extends Resource
                             $html = '';
                             foreach ($items as $item) {
                                 $flavorName = e($item->flavor?->name ?? '—');
-                                $size       = e($item->size ?? 'Regular');
+                                $size       = $item->size;
                                 $qty        = (int) $item->quantity;
-                                $ice        = e($item->ice   ?? 'Regular Ice');
-                                $sugar      = e($item->sugar ?? 'Regular Sugar');
-                                $price      = 'A$' . number_format((float) $item->price, 2);
-                                $sizeColor  = $sizeColors[$size] ?? '#374151';
+                                $ice        = $item->ice;
+                                $sugar      = $item->sugar;
+                                $unitPrice  = 'A$' . number_format($qty > 0 ? (float) $item->price / $qty : (float) $item->price, 2);
+                                $sizeColor  = $sizeColors[$size ?? ''] ?? '#374151';
 
                                 // Parse toppings
                                 $toppings = $item->toppings;
@@ -492,11 +492,31 @@ class OrderResource extends Resource
                                     ->filter()
                                     ->values();
 
+                                $sizeBadge = $size
+                                    ? '<span style="background:' . $sizeColor . ';color:#fff;padding:0.2rem 0.65rem;border-radius:9999px;font-size:0.75rem;font-weight:600;">' . e($size) . '</span>'
+                                    : '';
+
+                                $iceSugarHtml = '';
+                                if ($ice || $sugar) {
+                                    $parts = array_filter([
+                                        $ice   ? '🧊 ' . e($ice)   : null,
+                                        $sugar ? '🍬 ' . e($sugar) : null,
+                                    ]);
+                                    $iceSugarHtml = '<div style="display:flex;gap:1.5rem;align-items:center;font-size:0.875rem;color:#4b5563;margin-bottom:0.55rem;flex-wrap:wrap;">'
+                                        . implode('', array_map(fn($p) => "<span>{$p}</span>", $parts))
+                                        . '<span style="margin-left:auto;font-weight:700;font-size:0.95rem;color:#059669;">' . $unitPrice . ' <span style="font-weight:400;color:#6b7280;font-size:0.8rem;">/ each</span></span>'
+                                        . '</div>';
+                                } else {
+                                    $iceSugarHtml = '<div style="text-align:right;font-weight:700;font-size:0.95rem;color:#059669;margin-bottom:0.55rem;">' . $unitPrice . ' <span style="font-weight:400;color:#6b7280;font-size:0.8rem;">/ each</span></div>';
+                                }
+
                                 $toppingHtml = $toppingNames->isEmpty()
-                                    ? '<span style="color:#9ca3af;">None</span>'
-                                    : $toppingNames->map(fn ($t) =>
-                                        '<span style="display:inline-block;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:9999px;padding:0.1rem 0.6rem;font-size:0.75rem;color:#374151;margin:0.15rem 0.15rem 0 0;">' . e($t) . '</span>'
-                                      )->implode('');
+                                    ? ''
+                                    : '<div style="font-size:0.8rem;color:#6b7280;margin-top:0.3rem;"><span style="font-weight:600;color:#374151;">Toppings: </span>'
+                                      . $toppingNames->map(fn ($t) =>
+                                          '<span style="display:inline-block;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:9999px;padding:0.1rem 0.6rem;font-size:0.75rem;color:#374151;margin:0.15rem 0.15rem 0 0;">' . e($t) . '</span>'
+                                        )->implode('')
+                                      . '</div>';
 
                                 $html .= <<<HTML
                                 <div style="border:1px solid #e5e7eb;border-radius:0.75rem;padding:1rem 1.25rem;margin-bottom:0.75rem;background:#fafafa;">
@@ -505,22 +525,13 @@ class OrderResource extends Resource
                                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
                                         <span style="font-size:1.1rem;font-weight:700;color:#111827;">{$flavorName}</span>
                                         <div style="display:flex;gap:0.4rem;align-items:center;">
-                                            <span style="background:{$sizeColor};color:#fff;padding:0.2rem 0.65rem;border-radius:9999px;font-size:0.75rem;font-weight:600;">{$size}</span>
+                                            {$sizeBadge}
                                             <span style="background:#111827;color:#fff;padding:0.2rem 0.65rem;border-radius:9999px;font-size:0.85rem;font-weight:700;">× {$qty}</span>
                                         </div>
                                     </div>
 
-                                    <!-- Ice / Sugar / Price -->
-                                    <div style="display:flex;gap:1.5rem;align-items:center;font-size:0.875rem;color:#4b5563;margin-bottom:0.55rem;flex-wrap:wrap;">
-                                        <span>🧊 {$ice}</span>
-                                        <span>🍬 {$sugar}</span>
-                                        <span style="margin-left:auto;font-weight:700;font-size:0.95rem;color:#059669;">{$price} <span style="font-weight:400;color:#6b7280;font-size:0.8rem;">/ each</span></span>
-                                    </div>
-
-                                    <!-- Toppings -->
-                                    <div style="font-size:0.8rem;color:#6b7280;">
-                                        <span style="font-weight:600;color:#374151;">Toppings: </span>{$toppingHtml}
-                                    </div>
+                                    {$iceSugarHtml}
+                                    {$toppingHtml}
                                 </div>
                                 HTML;
                             }

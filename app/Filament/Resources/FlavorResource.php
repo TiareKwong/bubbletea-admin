@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\FlavorResource\Pages;
 use App\Models\Flavor;
 use App\Models\FlavorCategory;
+use App\Models\ProductType;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -43,9 +44,13 @@ class FlavorResource extends Resource
         return (bool) auth()->user()?->is_admin;
     }
 
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-beaker';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shopping-bag';
 
-    protected static ?string $navigationLabel = 'Flavors';
+    protected static ?string $navigationLabel = 'Products';
+
+    protected static ?string $modelLabel = 'Product';
+
+    protected static ?string $pluralModelLabel = 'Products';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Menu';
 
@@ -57,6 +62,17 @@ class FlavorResource extends Resource
             TextInput::make('name')
                 ->required()
                 ->maxLength(255),
+
+            Select::make('type')
+                ->options(fn () => ProductType::orderBy('name')
+                    ->pluck('name', 'name')
+                    ->mapWithKeys(fn ($v, $k) => [$k => ucfirst(str_replace('_', ' ', $v))])
+                    ->toArray())
+                ->default('drink')
+                ->required()
+                ->live()
+                ->columnSpanFull()
+                ->helperText('Manage types under Menu → Product Types. "drink" = full options, "ice_cream" = toppings only, everything else = simple add to cart. Only drink and ice_cream items earn loyalty points.'),
 
             Select::make('category')
                 ->options(fn () => FlavorCategory::orderBy('name')->pluck('name', 'name')->toArray())
@@ -89,25 +105,14 @@ class FlavorResource extends Resource
 
             \Filament\Schemas\Components\Section::make('Small')
                 ->columns(2)
+                ->visible(fn (Get $get): bool => $get('type') === 'drink')
                 ->schema([
                     TextInput::make('small_price')
                         ->label('Price ($)')
                         ->numeric()
                         ->minValue(0)
                         ->step(0.01)
-                        ->placeholder('Leave blank if not available')
-                        ->rules([
-                            fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
-                                $small   = $get('small_price');
-                                $regular = $get('regular_price');
-                                $large   = $get('large_price');
-                                if (($small === null || $small === '') &&
-                                    ($regular === null || $regular === '') &&
-                                    ($large === null || $large === '')) {
-                                    $fail('At least one size price must be filled in.');
-                                }
-                            },
-                        ]),
+                        ->placeholder('Leave blank if not available'),
 
                     TextInput::make('small_ml')
                         ->label('Size (ml)')
@@ -116,7 +121,7 @@ class FlavorResource extends Resource
                         ->placeholder('e.g. 360'),
                 ]),
 
-            \Filament\Schemas\Components\Section::make('Regular')
+            \Filament\Schemas\Components\Section::make(fn (Get $get): string => $get('type') === 'drink' ? 'Regular' : 'Price')
                 ->columns(2)
                 ->schema([
                     TextInput::make('regular_price')
@@ -124,17 +129,35 @@ class FlavorResource extends Resource
                         ->numeric()
                         ->minValue(0)
                         ->step(0.01)
-                        ->placeholder('Leave blank if not available'),
+                        ->placeholder('Leave blank if not available')
+                        ->rules([
+                            fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                $type    = $get('type') ?? 'drink';
+                                $small   = $get('small_price');
+                                $regular = $get('regular_price');
+                                $large   = $get('large_price');
+                                if ($type !== 'drink' && ($regular === null || $regular === '')) {
+                                    $fail('A price is required.');
+                                } elseif ($type === 'drink' &&
+                                    ($small === null || $small === '') &&
+                                    ($regular === null || $regular === '') &&
+                                    ($large === null || $large === '')) {
+                                    $fail('At least one size price must be filled in.');
+                                }
+                            },
+                        ]),
 
                     TextInput::make('regular_ml')
                         ->label('Size (ml)')
                         ->numeric()
                         ->minValue(1)
-                        ->placeholder('e.g. 500'),
+                        ->placeholder('e.g. 500')
+                        ->visible(fn (Get $get): bool => $get('type') === 'drink'),
                 ]),
 
             \Filament\Schemas\Components\Section::make('Large')
                 ->columns(2)
+                ->visible(fn (Get $get): bool => $get('type') === 'drink')
                 ->schema([
                     TextInput::make('large_price')
                         ->label('Price ($)')
@@ -174,6 +197,16 @@ class FlavorResource extends Resource
                     ->searchable()
                     ->sortable(),
 
+                TextColumn::make('type')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'drink'     => 'info',
+                        'ice_cream' => 'warning',
+                        default     => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state): string =>
+                        ucfirst(str_replace('_', ' ', $state))),
+
                 TextColumn::make('category')
                     ->badge()
                     ->placeholder('—'),
@@ -208,6 +241,13 @@ class FlavorResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('type')
+                    ->options(fn () => ProductType::orderBy('name')
+                        ->pluck('name', 'name')
+                        ->mapWithKeys(fn ($v, $k) => [$k => ucfirst(str_replace('_', ' ', $v))])
+                        ->toArray())
+                    ->placeholder('All Types'),
+
                 SelectFilter::make('status')
                     ->options([
                         'Available'    => 'Available',

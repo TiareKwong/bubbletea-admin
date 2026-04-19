@@ -139,7 +139,7 @@
             <div style="margin-bottom:1.25rem; padding:0.85rem 1rem; background:#f9fafb; border-radius:0.5rem; font-size:0.875rem;">
                 <div style="display:flex; flex-wrap:wrap; gap:1.5rem; margin-bottom:{{ ($data['topup_total'] > 0 || $data['change_total'] > 0) ? '0.6rem' : '0' }};">
                     <span style="color:#6b7280;">
-                        Drink orders: <strong style="color:#111827;">{{ $data['orders_count'] }}</strong>
+                        Orders: <strong style="color:#111827;">{{ $data['orders_count'] }}</strong>
                         &nbsp;·&nbsp;
                         <strong style="color:#059669;">A${{ number_format($data['orders_total'], 2) }}</strong>
                     </span>
