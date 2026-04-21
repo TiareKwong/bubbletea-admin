@@ -11,8 +11,11 @@ class CreateUser extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        // Always set is_staff=true when creating through the staff panel.
-        $data['is_staff'] = true;
+        $data['is_staff']      = true;
+        $data['is_verified']   = true;
+        $data['phone_number']  = $data['phone_number'] ?? '';
+        // users.name column (Laravel default) — keep in sync with first/last name
+        $data['name'] = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''));
 
         return $data;
     }

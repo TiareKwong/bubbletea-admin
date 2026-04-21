@@ -148,6 +148,7 @@ class OrderChangeWallet extends Component
         // Create a new debit record so the reversal is visible in wallet history
         WalletTransaction::create([
             'user_id'     => $order->user_id,
+            'branch_id'   => $order->branch_id,
             'type'        => 'reversal',
             'amount'      => $existing->amount,
             'reference'   => 'Change from order #' . $order->order_code,

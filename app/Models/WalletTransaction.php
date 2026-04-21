@@ -10,6 +10,7 @@ class WalletTransaction extends Model
 
     protected $fillable = [
         'user_id',
+        'branch_id',
         'type',
         'amount',
         'reference',
@@ -32,5 +33,10 @@ class WalletTransaction extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(\App\Models\Branch::class);
     }
 }

@@ -665,11 +665,6 @@ class OrderResource extends Resource
                         '0' => 'Not Yet Collected',
                     ]),
 
-                SelectFilter::make('branch_id')
-                    ->label('Branch')
-                    ->placeholder('All Branches')
-                    ->native(false)
-                    ->relationship('branch', 'name'),
             ], layout: FiltersLayout::AboveContent)
             ->deferFilters(false)
             ->filtersFormColumns(3)

@@ -11,6 +11,7 @@ class Expense extends Model
         'description',
         'category',
         'amount',
+        'paid_from',
         'purchased_by',
         'expense_date',
         'notes',

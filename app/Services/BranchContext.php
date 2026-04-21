@@ -10,7 +10,18 @@ class BranchContext
 
     public function getId(): ?int
     {
-        return session(self::SESSION_KEY);
+        if (session()->has(self::SESSION_KEY)) {
+            return session(self::SESSION_KEY);
+        }
+
+        // Default to the user's assigned branch on first load
+        $user = auth()->user();
+        if ($user && $user->branch_id) {
+            $this->set($user->branch_id);
+            return $user->branch_id;
+        }
+
+        return null;
     }
 
     public function set(int $id): void

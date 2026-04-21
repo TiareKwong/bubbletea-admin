@@ -5,9 +5,11 @@ namespace App\Filament\Resources\OrderResource\Pages;
 use App\Filament\Resources\OrderResource;
 use App\Models\Reward;
 use App\Models\WalletTransaction;
+use App\Services\BranchContext;
 use App\Services\PushNotificationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewOrder extends ViewRecord
@@ -15,6 +17,39 @@ class ViewOrder extends ViewRecord
     protected static string $resource = OrderResource::class;
 
     protected string $view = 'filament.resources.order-resource.pages.view-order';
+
+    /**
+     * Returns true if the current user can action this order.
+     * Admins can action any order. Staff can only action orders for their active branch.
+     */
+    protected function canActionOrder(): bool
+    {
+        $user = auth()->user();
+        if ($user?->is_admin) return true;
+
+        // Use the staff's assigned branch, falling back to the session branch.
+        // This means staff can switch to "All Branches" to find a cross-branch order
+        // but they can still only action orders from their own branch.
+        $staffBranchId = $user?->branch_id ?? app(BranchContext::class)->getId();
+        if (! $staffBranchId) return false;
+
+        return (int) $this->record->branch_id === (int) $staffBranchId;
+    }
+
+    public function mount(int|string $record): void
+    {
+        parent::mount($record);
+
+        if (! $this->canActionOrder()) {
+            $orderBranch = $this->record->branch?->name ?? 'another branch';
+            Notification::make()
+                ->title('Wrong branch')
+                ->body("This order belongs to {$orderBranch}. You cannot action it from your current branch.")
+                ->warning()
+                ->persistent()
+                ->send();
+        }
+    }
 
     protected function getHeaderActions(): array
     {
@@ -25,6 +60,7 @@ class ViewOrder extends ViewRecord
                 ->icon('heroicon-o-check-badge')
                 ->color('info')
                 ->visible(fn (): bool =>
+                    $this->canActionOrder() &&
                     $this->record->payment_method === 'Bank Transfer' &&
                     $this->record->order_status   === 'Payment Verification'
                 )
@@ -45,6 +81,7 @@ class ViewOrder extends ViewRecord
                         $order->user->decrement('wallet_balance', $walletUsed);
                         WalletTransaction::create([
                             'user_id'     => $order->user_id,
+                            'branch_id'   => $order->branch_id,
                             'type'        => 'payment',
                             'amount'      => $walletUsed,
                             'reference'   => $order->order_code,
@@ -80,6 +117,7 @@ class ViewOrder extends ViewRecord
                 ->icon('heroicon-o-check-badge')
                 ->color('success')
                 ->visible(fn (): bool =>
+                    $this->canActionOrder() &&
                     $this->record->payment_method !== 'Bank Transfer' &&
                     in_array($this->record->order_status, ['Pending Payment', 'Payment Verification', 'Points Verification'])
                 )
@@ -117,6 +155,7 @@ class ViewOrder extends ViewRecord
                         $order->user->decrement('wallet_balance', $walletUsed);
                         WalletTransaction::create([
                             'user_id'     => $order->user_id,
+                            'branch_id'   => $order->branch_id,
                             'type'        => 'payment',
                             'amount'      => $walletUsed,
                             'reference'   => $order->order_code,
@@ -140,7 +179,7 @@ class ViewOrder extends ViewRecord
                 ->label('Mark Preparing')
                 ->icon('heroicon-o-fire')
                 ->color('warning')
-                ->visible(fn (): bool => $this->record->order_status === 'Paid' && ! $this->record->collected)
+                ->visible(fn (): bool => $this->canActionOrder() && $this->record->order_status === 'Paid' && ! $this->record->collected)
                 ->requiresConfirmation()
                 ->modalHeading('Start Preparing')
                 ->modalDescription('Mark this order as being prepared?')
@@ -160,6 +199,7 @@ class ViewOrder extends ViewRecord
                 ->icon('heroicon-o-bell')
                 ->color('success')
                 ->visible(fn (): bool =>
+                    $this->canActionOrder() &&
                     $this->record->order_status === 'Preparing' &&
                     ! $this->record->collected &&
                     $this->record->payment_method !== 'Points'
@@ -183,6 +223,7 @@ class ViewOrder extends ViewRecord
                 ->icon('heroicon-o-shopping-bag')
                 ->color('primary')
                 ->visible(fn (): bool =>
+                    $this->canActionOrder() &&
                     in_array($this->record->order_status, ['Paid', 'Preparing', 'Ready']) &&
                     ! $this->record->collected
                 )
@@ -206,6 +247,7 @@ class ViewOrder extends ViewRecord
                 ->icon('heroicon-o-wallet')
                 ->color('info')
                 ->visible(fn (): bool =>
+                    $this->canActionOrder() &&
                     $this->record->user_id !== null &&
                     $this->record->payment_method === 'Cash' &&
                     in_array($this->record->order_status, ['Paid', 'Preparing', 'Ready', 'Collected']) &&
@@ -287,6 +329,7 @@ class ViewOrder extends ViewRecord
 
                     WalletTransaction::create([
                         'user_id'     => $order->user_id,
+                        'branch_id'   => $order->branch_id,
                         'type'        => 'change',
                         'amount'      => $changeAmount,
                         'reference'   => 'Change from order #' . $order->order_code,
@@ -401,6 +444,7 @@ class ViewOrder extends ViewRecord
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
                 ->visible(fn (): bool =>
+                    $this->canActionOrder() &&
                     ! in_array($this->record->order_status, ['Cancelled']) &&
                     ! $this->record->collected
                 )
@@ -447,6 +491,7 @@ class ViewOrder extends ViewRecord
                             $order->user->increment('wallet_balance', $walletUsed);
                             WalletTransaction::create([
                                 'user_id'     => $order->user_id,
+                                'branch_id'   => $order->branch_id,
                                 'type'        => 'refund',
                                 'amount'      => $walletUsed,
                                 'reference'   => $order->order_code,

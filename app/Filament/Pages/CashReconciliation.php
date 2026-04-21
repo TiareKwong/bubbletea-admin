@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\CashReconciliation as ReconciliationModel;
+use App\Models\Expense;
 use App\Models\Order;
 use App\Models\WalletTopupRequest;
 use App\Models\WalletTransaction;
@@ -21,6 +22,12 @@ class CashReconciliation extends Page
     protected static string|\UnitEnum|null $navigationGroup = 'Reports';
 
     protected static ?int $navigationSort = 3;
+
+    public function getTitle(): string
+    {
+        $branch = app(BranchContext::class)->getBranch();
+        return $branch ? 'Daily Reconciliation — ' . $branch->name : 'Daily Reconciliation';
+    }
 
     public string $selectedDate = '';
 
@@ -165,10 +172,22 @@ class CashReconciliation extends Page
             ->keyBy('payment_method');
 
         // 3. Change-to-wallet (always Cash — customer overpays, change goes to wallet)
-        $changeTotal = WalletTransaction::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) = ?", [$this->selectedDate])
+        $branchId = $this->branchId();
+        $changeQuery = WalletTransaction::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) = ?", [$this->selectedDate])
             ->where('type', 'change')
-            ->whereNull('removed_at')
-            ->sum('amount');
+            ->whereNull('removed_at');
+        if ($branchId) {
+            $changeQuery->where('branch_id', $branchId);
+        }
+        $changeTotal = $changeQuery->sum('amount');
+
+        // 4. Cash box expenses (deducted from Cash expected total)
+        $expenseQuery = Expense::where('expense_date', $this->selectedDate)
+            ->where('paid_from', 'cash_box');
+        if ($branchId) {
+            $expenseQuery->where('branch_id', $branchId);
+        }
+        $cashBoxExpenses = (float) $expenseQuery->sum('amount');
 
         $result = [];
         foreach (self::METHODS as $method) {
@@ -177,15 +196,17 @@ class CashReconciliation extends Page
             $ordersTotal = $orderRow ? (float) $orderRow->total : 0.0;
             $topupTotal  = $topupRow ? (float) $topupRow->total : 0.0;
             $change      = $method === 'Cash' ? (float) $changeTotal : 0.0;
+            $expenses    = $method === 'Cash' ? $cashBoxExpenses : 0.0;
 
             $result[$method] = [
-                'expected'     => $ordersTotal + $topupTotal + $change,
-                'count'        => $orderRow ? (int) $orderRow->count : 0,
-                'orders_total' => $ordersTotal,
-                'orders_count' => $orderRow ? (int) $orderRow->count : 0,
-                'topup_total'  => $topupTotal,
-                'topup_count'  => $topupRow ? (int) $topupRow->count : 0,
-                'change_total' => $change,
+                'expected'      => $ordersTotal + $topupTotal + $change - $expenses,
+                'count'         => $orderRow ? (int) $orderRow->count : 0,
+                'orders_total'  => $ordersTotal,
+                'orders_count'  => $orderRow ? (int) $orderRow->count : 0,
+                'topup_total'   => $topupTotal,
+                'topup_count'   => $topupRow ? (int) $topupRow->count : 0,
+                'change_total'  => $change,
+                'expense_total' => $expenses,
             ];
         }
         return $result;

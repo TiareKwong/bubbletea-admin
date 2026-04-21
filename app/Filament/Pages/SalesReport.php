@@ -20,6 +20,12 @@ class SalesReport extends Page
 
     protected static ?int $navigationSort = 1;
 
+    public function getTitle(): string
+    {
+        $branch = app(BranchContext::class)->getBranch();
+        return $branch ? 'Sales Report — ' . $branch->name : 'Sales Report';
+    }
+
     public string $period        = 'day';
     public int    $selectedMonth;
     public int    $selectedYear;

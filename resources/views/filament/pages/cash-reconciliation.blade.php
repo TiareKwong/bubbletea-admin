@@ -97,6 +97,9 @@
                 @if($data['change_total'] > 0)
                     &nbsp;·&nbsp; +A${{ number_format($data['change_total'], 2) }} change
                 @endif
+                @if(($data['expense_total'] ?? 0) > 0)
+                    &nbsp;·&nbsp; −A${{ number_format($data['expense_total'], 2) }} expenses
+                @endif
                 @if($hasAny)
                     &nbsp;·&nbsp;
                     <span style="font-weight:600; color:{{ $cumulativeDiff >= 0 ? '#059669' : '#dc2626' }};">
@@ -137,7 +140,8 @@
         @else
             {{-- Summary row --}}
             <div style="margin-bottom:1.25rem; padding:0.85rem 1rem; background:#f9fafb; border-radius:0.5rem; font-size:0.875rem;">
-                <div style="display:flex; flex-wrap:wrap; gap:1.5rem; margin-bottom:{{ ($data['topup_total'] > 0 || $data['change_total'] > 0) ? '0.6rem' : '0' }};">
+                @php $hasBreakdown = $data['topup_total'] > 0 || $data['change_total'] > 0 || ($data['expense_total'] ?? 0) > 0; @endphp
+                <div style="display:flex; flex-wrap:wrap; gap:1.5rem; margin-bottom:{{ $hasBreakdown ? '0.6rem' : '0' }};">
                     <span style="color:#6b7280;">
                         Orders: <strong style="color:#111827;">{{ $data['orders_count'] }}</strong>
                         &nbsp;·&nbsp;
@@ -156,8 +160,14 @@
                             <strong style="color:#b45309;">A${{ number_format($data['change_total'], 2) }}</strong>
                         </span>
                     @endif
+                    @if(($data['expense_total'] ?? 0) > 0)
+                        <span style="color:#6b7280;">
+                            Cash box expenses:
+                            <strong style="color:#dc2626;">−A${{ number_format($data['expense_total'], 2) }}</strong>
+                        </span>
+                    @endif
                 </div>
-                @if($data['topup_total'] > 0 || $data['change_total'] > 0)
+                @if($hasBreakdown)
                     <div style="border-top:1px solid #e5e7eb; padding-top:0.5rem; margin-top:0.5rem;">
                         <span style="color:#6b7280; font-weight:600;">
                             Total expected in till:

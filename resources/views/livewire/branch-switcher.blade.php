@@ -1,16 +1,22 @@
-<div x-data="{ open: false }" class="relative flex items-center mr-3">
+<div x-data="{ open: false }" style="position:relative; display:inline-flex; align-items:center; height:100%; margin-left:0.75rem; margin-right:0.25rem;">
+
     <button
         @click="open = !open"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition
-               {{ $activeBranch ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-amber-400/90 hover:bg-amber-300 text-amber-900 animate-pulse' }}"
+        style="display:inline-flex; align-items:center; gap:0.375rem;
+               padding:0.3125rem 0.625rem;
+               border-radius:0.5rem; font-size:0.8125rem; font-weight:600; cursor:pointer;
+               border:1.5px solid {{ $activeBranch ? '#7c3aed' : '#f59e0b' }};
+               background:{{ $activeBranch ? '#f5f3ff' : '#fef3c7' }};
+               color:{{ $activeBranch ? '#6d28d9' : '#92400e' }};
+               line-height:1; white-space:nowrap;"
     >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        <svg style="width:13px;height:13px;flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
         </svg>
-        <span>{{ $activeBranch?->name ?? 'Select Branch' }}</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+        <span>{{ $activeBranch?->name ?? 'All Branches' }}</span>
+        <svg style="width:10px;height:10px;flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
         </svg>
     </button>
 
@@ -18,16 +24,20 @@
         x-show="open"
         @click.outside="open = false"
         x-transition
-        class="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden"
-        style="display:none;"
+        style="display:none; position:absolute; right:0; top:calc(100% + 6px); width:200px;
+               background:#fff; border-radius:0.75rem; box-shadow:0 10px 25px rgba(0,0,0,0.15);
+               border:1px solid #e5e7eb; z-index:9999; overflow:hidden;"
     >
-        @if($activeBranch)
+        @if($isAdmin && $activeBranch)
         <button
             wire:click="clearBranch"
-            class="w-full text-left px-4 py-2.5 text-sm text-gray-400 hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"
+            style="width:100%; text-align:left; padding:0.625rem 1rem; font-size:0.8125rem;
+                   color:#9ca3af; background:none; border:none; border-bottom:1px solid #f3f4f6;
+                   cursor:pointer; display:flex; align-items:center; gap:0.5rem;"
+            onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='none'"
         >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
             All Branches
         </button>
@@ -37,19 +47,20 @@
         <button
             wire:click="switchBranch({{ $branch->id }})"
             @click="open = false"
-            class="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 transition
-                   {{ $activeBranch?->id === $branch->id
-                       ? 'bg-purple-50 text-purple-700 font-semibold'
-                       : 'text-gray-700 hover:bg-gray-50' }}"
+            style="width:100%; text-align:left; padding:0.625rem 1rem; font-size:0.8125rem;
+                   {{ $activeBranch?->id === $branch->id ? 'color:#6d28d9; font-weight:600; background:#f5f3ff;' : 'color:#374151; background:none;' }}
+                   border:none; cursor:pointer; display:flex; align-items:center; gap:0.5rem;"
+            onmouseover="this.style.background='{{ $activeBranch?->id === $branch->id ? '#ede9fe' : '#f9fafb' }}'"
+            onmouseout="this.style.background='{{ $activeBranch?->id === $branch->id ? '#f5f3ff' : 'none' }}'"
         >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 {{ $activeBranch?->id === $branch->id ? 'text-purple-500' : 'text-gray-300' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
             </svg>
             {{ $branch->name }}
         </button>
         @empty
-        <p class="px-4 py-3 text-sm text-gray-400">No branches set up yet.</p>
+        <p style="padding:0.75rem 1rem; font-size:0.8125rem; color:#9ca3af;">No branches set up yet.</p>
         @endforelse
     </div>
 </div>

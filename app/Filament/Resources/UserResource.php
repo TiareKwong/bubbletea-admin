@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\UserResource\Pages;
+use App\Models\Branch;
 use App\Models\User;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -73,6 +74,7 @@ class UserResource extends Resource
                     ->password()
                     ->revealable()
                     ->minLength(8)
+                    ->required(fn (string $operation): bool => $operation === 'create')
                     ->dehydrated(fn (?string $state): bool => filled($state))
                     ->helperText('Leave blank to keep the current password.')
                     ->columnSpanFull(),
@@ -80,7 +82,8 @@ class UserResource extends Resource
                 TextInput::make('phone_number')
                     ->label('Phone')
                     ->tel()
-                    ->maxLength(20),
+                    ->maxLength(20)
+                    ->dehydrateStateUsing(fn (?string $state): string => $state ?? ''),
 
                 Toggle::make('is_staff')
                     ->label('Can access staff panel')
@@ -91,6 +94,14 @@ class UserResource extends Resource
                     ->label('Admin (full access)')
                     ->helperText('Admins can create, edit, and delete menu items, toppings, and promotions.')
                     ->inline(false),
+
+                Select::make('branch_id')
+                    ->label('Assigned Branch')
+                    ->relationship('branch', 'name')
+                    ->options(Branch::where('is_active', true)->orderBy('name')->pluck('name', 'id'))
+                    ->placeholder('— Select branch —')
+                    ->helperText('Staff can only see data for their assigned branch. Leave blank for admins.')
+                    ->columnSpanFull(),
             ]),
         ]);
     }
@@ -111,6 +122,12 @@ class UserResource extends Resource
                 TextColumn::make('phone_number')
                     ->label('Phone')
                     ->placeholder('—'),
+
+                TextColumn::make('branch.name')
+                    ->label('Branch')
+                    ->placeholder('—')
+                    ->badge()
+                    ->color('primary'),
 
                 IconColumn::make('is_admin')
                     ->label('Admin')

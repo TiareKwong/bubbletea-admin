@@ -4,7 +4,9 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ExpenseResource\Pages;
 use App\Models\Expense;
+use App\Services\BranchContext;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
@@ -50,6 +52,16 @@ class ExpenseResource extends Resource
                 ->minValue(0.01)
                 ->required()
                 ->prefix('A$'),
+
+            Select::make('paid_from')
+                ->label('Paid from')
+                ->required()
+                ->default('cash_box')
+                ->options([
+                    'cash_box'  => 'Cash Box (deducted from today\'s cash)',
+                    'own_money' => 'Own Money (staff paid personally)',
+                ])
+                ->helperText('Cash Box will reduce the expected cash in Daily Reconciliation.'),
 
             TextInput::make('purchased_by')
                 ->label('Purchased by')
@@ -114,6 +126,12 @@ class ExpenseResource extends Resource
                 DeleteAction::make()
                     ->visible(fn (): bool => (bool) auth()->user()?->is_admin),
             ]);
+    }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = parent::getEloquentQuery();
+        return app(BranchContext::class)->applyTo($query);
     }
 
     public static function getPages(): array

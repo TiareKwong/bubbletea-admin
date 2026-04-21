@@ -6,6 +6,7 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -25,6 +26,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         'password',
         'is_staff',
         'is_admin',
+        'branch_id',
         'birthday',
         'phone_number',
         'is_verified',
@@ -104,6 +106,11 @@ class User extends Authenticatable implements FilamentUser, HasName
         } catch (\Exception $e) {
             \Log::error('Password reset email exception: ' . $e->getMessage());
         }
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function orders(): HasMany
