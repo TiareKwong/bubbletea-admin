@@ -97,8 +97,14 @@
                 @if($data['change_total'] > 0)
                     &nbsp;·&nbsp; +A${{ number_format($data['change_total'], 2) }} change
                 @endif
+                @if(($data['float_amount'] ?? 0) > 0)
+                    &nbsp;·&nbsp; +A${{ number_format($data['float_amount'], 2) }} float
+                @endif
                 @if(($data['expense_total'] ?? 0) > 0)
                     &nbsp;·&nbsp; −A${{ number_format($data['expense_total'], 2) }} expenses
+                @endif
+                @if(($data['reimb_total'] ?? 0) > 0)
+                    &nbsp;·&nbsp; −A${{ number_format($data['reimb_total'], 2) }} reimbursements
                 @endif
                 @if($hasAny)
                     &nbsp;·&nbsp;
@@ -135,13 +141,62 @@
     <x-filament::section style="margin-top:1.5rem;">
         <x-slot name="heading">{{ $icon }} {{ $method }}</x-slot>
 
-        @if($data['count'] === 0 && ! $hasAny)
-            <p style="color:#9ca3af; font-size:0.875rem;">No {{ $method }} orders on this date — nothing to reconcile.</p>
+        {{-- Float input — Cash only --}}
+        @if($method === 'Cash')
+            <div style="margin-bottom:1.25rem; padding:0.85rem 1rem; background:#eff6ff; border:1px solid #bfdbfe; border-radius:0.5rem;">
+                <p style="font-size:0.8rem; font-weight:600; color:#1e40af; margin:0 0 0.5rem;">💰 Opening Float</p>
+
+                <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                    <input
+                        wire:model.live="floatAmount"
+                        type="number" min="0" step="0.01" placeholder="0.00"
+                        style="width:10rem; border:1px solid #93c5fd; border-radius:0.5rem; padding:0.5rem 0.75rem; font-size:1rem; font-weight:600; color:#1e40af; background:#fff; outline:none;"
+                    />
+                    <button
+                        wire:click="saveFloat"
+                        style="background:#1d4ed8; color:#fff; border:none; border-radius:0.5rem; padding:0.5rem 1.1rem; font-size:0.875rem; font-weight:600; cursor:pointer; white-space:nowrap;">
+                        Save Float
+                    </button>
+                    @if(($data['float_amount'] ?? 0) > 0)
+                        <span style="font-size:0.8rem; color:#1e40af;">
+                            ✓ A${{ number_format($data['float_amount'], 2) }} set
+                        </span>
+                    @else
+                        <span style="font-size:0.8rem; color:#6b7280;">Not set — defaults to A$0.00</span>
+                    @endif
+                </div>
+
+                {{-- Helper text --}}
+                <p style="font-size:0.75rem; color:#1e40af; margin:0.5rem 0 0.15rem;">
+                    Opening cash in the drawer at the <strong>start of day</strong> — the seed money before any sales.
+                </p>
+                <p style="font-size:0.72rem; color:#6b7280; margin:0;">
+                    This is <strong>not</strong> yesterday's closing cash &nbsp;·&nbsp; <strong>not</strong> the total you count at end of day.
+                </p>
+
+                {{-- Last updated by --}}
+                @if($floatSetBy)
+                    <p style="font-size:0.7rem; color:#93c5fd; margin:0.4rem 0 0;">
+                        Last updated by <strong>{{ $floatSetBy }}</strong>
+                        @if($floatUpdatedAt) at {{ $floatUpdatedAt }} @endif
+                    </p>
+                @endif
+            </div>
+        @endif
+
+        @if($data['count'] === 0 && $data['topup_total'] == 0 && $data['change_total'] == 0 && ($data['reimb_total'] ?? 0) == 0 && ! $hasAny)
+            <p style="color:#9ca3af; font-size:0.875rem;">No {{ $method }} activity on this date — nothing to reconcile.</p>
         @else
             {{-- Summary row --}}
             <div style="margin-bottom:1.25rem; padding:0.85rem 1rem; background:#f9fafb; border-radius:0.5rem; font-size:0.875rem;">
-                @php $hasBreakdown = $data['topup_total'] > 0 || $data['change_total'] > 0 || ($data['expense_total'] ?? 0) > 0; @endphp
+                @php $hasBreakdown = ($data['float_amount'] ?? 0) > 0 || $data['topup_total'] > 0 || $data['change_total'] > 0 || ($data['expense_total'] ?? 0) > 0 || ($data['reimb_total'] ?? 0) > 0; @endphp
                 <div style="display:flex; flex-wrap:wrap; gap:1.5rem; margin-bottom:{{ $hasBreakdown ? '0.6rem' : '0' }};">
+                    @if(($data['float_amount'] ?? 0) > 0)
+                        <span style="color:#6b7280;">
+                            Opening float:
+                            <strong style="color:#1d4ed8;">+A${{ number_format($data['float_amount'], 2) }}</strong>
+                        </span>
+                    @endif
                     <span style="color:#6b7280;">
                         Orders: <strong style="color:#111827;">{{ $data['orders_count'] }}</strong>
                         &nbsp;·&nbsp;
@@ -164,6 +219,12 @@
                         <span style="color:#6b7280;">
                             Cash box expenses:
                             <strong style="color:#dc2626;">−A${{ number_format($data['expense_total'], 2) }}</strong>
+                        </span>
+                    @endif
+                    @if(($data['reimb_total'] ?? 0) > 0)
+                        <span style="color:#6b7280;">
+                            Staff reimbursements:
+                            <strong style="color:#dc2626;">−A${{ number_format($data['reimb_total'], 2) }}</strong>
                         </span>
                     @endif
                 </div>

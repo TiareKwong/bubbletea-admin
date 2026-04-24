@@ -16,6 +16,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -107,8 +108,29 @@ class ExpenseResource extends Resource
 
                 TextColumn::make('created_by')
                     ->label('Entered by'),
+
+                TextColumn::make('reimbursement_status')
+                    ->label('Reimbursement')
+                    ->badge()
+                    ->color(fn (?string $state) => match($state) {
+                        'unpaid'     => 'warning',
+                        'reimbursed' => 'success',
+                        default      => null,
+                    })
+                    ->formatStateUsing(fn (?string $state) => match($state) {
+                        'unpaid'     => 'Unpaid',
+                        'reimbursed' => 'Reimbursed',
+                        default      => '—',
+                    }),
             ])
             ->filters([
+                SelectFilter::make('reimbursement_status')
+                    ->label('Reimbursement')
+                    ->options([
+                        'unpaid'     => 'Unpaid (own money)',
+                        'reimbursed' => 'Reimbursed',
+                    ])
+                    ->placeholder('All'),
                 Filter::make('expense_date')
                     ->form([
                         DatePicker::make('from')->label('From'),

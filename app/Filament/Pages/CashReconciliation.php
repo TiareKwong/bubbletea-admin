@@ -3,8 +3,10 @@
 namespace App\Filament\Pages;
 
 use App\Models\CashReconciliation as ReconciliationModel;
+use App\Models\DailyFloat;
 use App\Models\Expense;
 use App\Models\Order;
+use App\Models\ReimbursementPayment;
 use App\Models\WalletTopupRequest;
 use App\Models\WalletTransaction;
 use App\Services\BranchContext;
@@ -29,7 +31,10 @@ class CashReconciliation extends Page
         return $branch ? 'Daily Reconciliation — ' . $branch->name : 'Daily Reconciliation';
     }
 
-    public string $selectedDate = '';
+    public string $selectedDate   = '';
+    public string $floatAmount    = '';
+    public ?string $floatSetBy    = null;
+    public ?string $floatUpdatedAt = null;
 
     public array $actualAmounts = [
         'Cash'          => '',
@@ -94,6 +99,7 @@ class CashReconciliation extends Page
     public function mount(): void
     {
         $this->selectedDate = now('Pacific/Tarawa')->toDateString();
+        $this->loadFloat();
         $this->checkMissingDates();
     }
 
@@ -102,7 +108,54 @@ class CashReconciliation extends Page
         $this->actualAmounts  = ['Cash' => '', 'EFTPOS' => '', 'Bank Transfer' => ''];
         $this->notes          = ['Cash' => '', 'EFTPOS' => '', 'Bank Transfer' => ''];
         $this->denominations  = array_fill_keys(array_keys(self::DENOMINATION_VALUES), '');
+        $this->loadFloat();
         $this->checkMissingDates();
+    }
+
+    private function loadFloat(): void
+    {
+        $existing = DailyFloat::where('date', $this->selectedDate)
+            ->where('branch_id', $this->branchId())
+            ->first();
+
+        $this->floatAmount    = $existing ? number_format((float) $existing->amount, 2) : '';
+        $this->floatSetBy     = $existing?->set_by;
+        $this->floatUpdatedAt = $existing
+            ? $existing->updated_at->setTimezone('Pacific/Tarawa')->format('d M Y, h:i A')
+            : null;
+    }
+
+    public function saveFloat(): void
+    {
+        $amount   = max(0.0, (float) str_replace(',', '', $this->floatAmount ?: '0'));
+        $branchId = $this->branchId();
+
+        $hasSubmissions = ReconciliationModel::whereDate('reconciliation_date', $this->selectedDate)
+            ->where('branch_id', $branchId)
+            ->exists();
+
+        DailyFloat::updateOrCreate(
+            ['branch_id' => $branchId, 'date' => $this->selectedDate],
+            ['amount' => $amount, 'set_by' => auth()->user()->getFilamentName()]
+        );
+
+        $this->floatAmount    = number_format($amount, 2);
+        $this->floatSetBy     = auth()->user()->getFilamentName();
+        $this->floatUpdatedAt = now('Pacific/Tarawa')->format('d M Y, h:i A');
+
+        if ($hasSubmissions) {
+            Notification::make()
+                ->title('Float updated — A$' . number_format($amount, 2))
+                ->body('Float has already been used in submitted reconciliation entries for this date. Changing it may cause mismatches with previously submitted figures. The expected cash shown on screen now reflects the new float.')
+                ->warning()
+                ->persistent()
+                ->send();
+        } else {
+            Notification::make()
+                ->title('Float saved — A$' . number_format($amount, 2))
+                ->success()
+                ->send();
+        }
     }
 
     private function branchId(): ?int
@@ -164,15 +217,19 @@ class CashReconciliation extends Page
             ->keyBy('payment_method');
 
         // 2. Approved wallet top-ups per payment method (approved on selected date)
-        $topupRows = WalletTopupRequest::whereRaw("DATE(CONVERT_TZ(updated_at, '+00:00', '" . self::TZ_OFFSET . "')) = ?", [$this->selectedDate])
-            ->where('status', 'Approved')
+        $branchId = $this->branchId();
+        $topupQuery = WalletTopupRequest::whereRaw("DATE(updated_at) = ?", [$this->selectedDate])
+            ->where('status', 'Approved');
+        if ($branchId) {
+            $topupQuery->where('branch_id', $branchId);
+        }
+        $topupRows = $topupQuery
             ->selectRaw('payment_method, SUM(amount) as total, COUNT(*) as count')
             ->groupBy('payment_method')
             ->get()
             ->keyBy('payment_method');
 
         // 3. Change-to-wallet (always Cash — customer overpays, change goes to wallet)
-        $branchId = $this->branchId();
         $changeQuery = WalletTransaction::whereRaw("DATE(CONVERT_TZ(created_at, '+00:00', '" . self::TZ_OFFSET . "')) = ?", [$this->selectedDate])
             ->where('type', 'change')
             ->whereNull('removed_at');
@@ -189,6 +246,20 @@ class CashReconciliation extends Page
         }
         $cashBoxExpenses = (float) $expenseQuery->sum('amount');
 
+        // 4b. Cash reimbursement payments (cash paid out to reimburse staff — deducted from Cash)
+        $reimbQuery = ReimbursementPayment::where('payment_date', $this->selectedDate)
+            ->where('payment_method', 'Cash');
+        if ($branchId) {
+            $reimbQuery->where('branch_id', $branchId);
+        }
+        $cashReimbursements = (float) $reimbQuery->sum('amount');
+
+        // 5. Opening float (Cash only)
+        $floatRecord = DailyFloat::where('date', $this->selectedDate)
+            ->where('branch_id', $branchId)
+            ->first();
+        $floatAmount = $floatRecord ? (float) $floatRecord->amount : 0.0;
+
         $result = [];
         foreach (self::METHODS as $method) {
             $orderRow    = $orderRows->get($method);
@@ -197,16 +268,20 @@ class CashReconciliation extends Page
             $topupTotal  = $topupRow ? (float) $topupRow->total : 0.0;
             $change      = $method === 'Cash' ? (float) $changeTotal : 0.0;
             $expenses    = $method === 'Cash' ? $cashBoxExpenses : 0.0;
+            $reimb       = $method === 'Cash' ? $cashReimbursements : 0.0;
+            $float       = $method === 'Cash' ? $floatAmount : 0.0;
 
             $result[$method] = [
-                'expected'      => $ordersTotal + $topupTotal + $change - $expenses,
-                'count'         => $orderRow ? (int) $orderRow->count : 0,
-                'orders_total'  => $ordersTotal,
-                'orders_count'  => $orderRow ? (int) $orderRow->count : 0,
-                'topup_total'   => $topupTotal,
-                'topup_count'   => $topupRow ? (int) $topupRow->count : 0,
-                'change_total'  => $change,
-                'expense_total' => $expenses,
+                'expected'       => $float + $ordersTotal + $topupTotal + $change - $expenses - $reimb,
+                'count'          => $orderRow ? (int) $orderRow->count : 0,
+                'orders_total'   => $ordersTotal,
+                'orders_count'   => $orderRow ? (int) $orderRow->count : 0,
+                'topup_total'    => $topupTotal,
+                'topup_count'    => $topupRow ? (int) $topupRow->count : 0,
+                'change_total'   => $change,
+                'expense_total'  => $expenses,
+                'reimb_total'    => $reimb,
+                'float_amount'   => $float,
             ];
         }
         return $result;

@@ -98,6 +98,8 @@
     $flavors  = $this->getTopFlavors();
     $statuses = $this->getStatusBreakdown();
     $expenses = $this->getExpenseSummary();
+    $float    = $this->getFloatSummary();
+    $topups   = $this->getTopupSummary();
 
     $netProfit = $summary['total_revenue'] - $expenses['total'];
 
@@ -128,7 +130,15 @@
             <p style="font-size:0.8rem; color:#6b7280; margin:0 0 0.35rem;">Total Expenses</p>
             <p style="font-size:1.75rem; font-weight:700; color:#dc2626; margin:0; line-height:1.2;">A${{ number_format($expenses['total'], 2) }}</p>
         </div>
-        <div></div>
+        <div style="border:1px solid #bfdbfe; border-radius:0.75rem; background:#eff6ff; padding:1.25rem;">
+            <p style="font-size:0.8rem; color:#6b7280; margin:0 0 0.35rem;">
+                💰 {{ $period === 'day' ? 'Opening Float' : 'Opening Float (period total)' }}
+            </p>
+            <p style="font-size:1.75rem; font-weight:700; color:#1d4ed8; margin:0; line-height:1.2;">
+                {{ $float['total'] > 0 ? 'A$' . number_format($float['total'], 2) : '—' }}
+            </p>
+            <p style="font-size:0.7rem; color:#3b82f6; margin:0.25rem 0 0;">Reference only · not included in revenue or profit</p>
+        </div>
         <div style="border:1px solid {{ $netProfit >= 0 ? '#d1fae5' : '#fee2e2' }}; border-radius:0.75rem; background:{{ $netProfit >= 0 ? '#f0fdf4' : '#fff7f7' }}; padding:1.25rem;">
             <p style="font-size:0.8rem; color:#6b7280; margin:0 0 0.35rem;">Net Profit</p>
             <p style="font-size:1.75rem; font-weight:700; color:{{ $netProfit >= 0 ? '#059669' : '#dc2626' }}; margin:0; line-height:1.2;">A${{ number_format(abs($netProfit), 2) }}{{ $netProfit < 0 ? ' loss' : '' }}</p>
@@ -195,6 +205,40 @@
     </x-filament::section>
 
 </div>
+
+{{-- ── Wallet Top-ups breakdown ─────────────────────────────────────── --}}
+<x-filament::section style="margin-top:1.5rem;">
+    <x-slot name="heading">Wallet Top-ups — {{ $this->getPeriodLabel() }}</x-slot>
+    @if(empty($topups['rows']))
+        <p style="color:#9ca3af; font-size:0.875rem;">No approved wallet top-ups for this period.</p>
+    @else
+        <table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+            <thead>
+                <tr style="border-bottom:2px solid #f3f4f6;">
+                    <th style="text-align:left; padding:0.5rem 0; color:#6b7280; font-weight:600;">Payment Method</th>
+                    <th style="text-align:right; padding:0.5rem 0; color:#6b7280; font-weight:600;">Count</th>
+                    <th style="text-align:right; padding:0.5rem 0; color:#6b7280; font-weight:600;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($topups['rows'] as $row)
+                    <tr style="border-bottom:1px solid #f9fafb;">
+                        <td style="padding:0.6rem 0; font-weight:500;">{{ $row['payment_method'] }}</td>
+                        <td style="padding:0.6rem 0; text-align:right; color:#4b5563;">{{ $row['count'] }}</td>
+                        <td style="padding:0.6rem 0; text-align:right; font-weight:600; color:#7c3aed;">A${{ number_format($row['total'], 2) }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr style="border-top:2px solid #f3f4f6;">
+                    <td style="padding:0.75rem 0; font-weight:700;">Total</td>
+                    <td style="padding:0.75rem 0; text-align:right; font-weight:700; color:#4b5563;">{{ $topups['count'] }}</td>
+                    <td style="padding:0.75rem 0; text-align:right; font-weight:700; color:#7c3aed;">A${{ number_format($topups['total'], 2) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    @endif
+</x-filament::section>
 
 {{-- ── Expenses breakdown ───────────────────────────────────────────── --}}
 <x-filament::section style="margin-top:1.5rem;">

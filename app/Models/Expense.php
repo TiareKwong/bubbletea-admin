@@ -17,7 +17,27 @@ class Expense extends Model
         'notes',
         'created_by',
         'branch_id',
+        'reimbursement_status',
+        'reimbursement_payment_id',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $expense) {
+            if ($expense->paid_from === 'own_money' && $expense->reimbursement_status === null) {
+                $expense->reimbursement_status = 'unpaid';
+            }
+            if ($expense->paid_from === 'cash_box') {
+                $expense->reimbursement_status = null;
+                $expense->reimbursement_payment_id = null;
+            }
+        });
+    }
+
+    public function reimbursementPayment()
+    {
+        return $this->belongsTo(ReimbursementPayment::class);
+    }
 
     protected $attributes = [
         'category' => 'Other',

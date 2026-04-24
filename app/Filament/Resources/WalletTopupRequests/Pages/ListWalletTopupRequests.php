@@ -6,6 +6,7 @@ use App\Filament\Resources\WalletTopupRequests\WalletTopupRequestResource;
 use App\Models\User;
 use App\Models\WalletTopupRequest;
 use App\Models\WalletTransaction;
+use App\Services\BranchContext;
 use App\Services\PushNotificationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -69,6 +70,7 @@ class ListWalletTopupRequests extends ListRecords
 
                     WalletTopupRequest::create([
                         'user_id'        => $data['user_id'],
+                        'branch_id'      => app(BranchContext::class)->getId(),
                         'amount'         => $amount,
                         'payment_method' => $data['payment_method'],
                         'status'         => 'Approved',

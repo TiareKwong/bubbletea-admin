@@ -2,8 +2,10 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\DailyFloat;
 use App\Models\Expense;
 use App\Models\Order;
+use App\Models\WalletTopupRequest;
 use App\Services\BranchContext;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
@@ -197,6 +199,77 @@ class SalesReport extends Page
             ->orderByDesc('count')
             ->get()
             ->toArray();
+    }
+
+    public function getFloatSummary(): array
+    {
+        $tz = 'Pacific/Tarawa';
+
+        [$dateFrom, $dateTo] = match ($this->period) {
+            'day'   => [now($tz)->toDateString(), now($tz)->toDateString()],
+            'week'  => [now($tz)->copy()->startOfWeek()->toDateString(), now($tz)->copy()->endOfWeek()->toDateString()],
+            'month' => [
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth, 1, 0, 0, 0, $tz)->startOfMonth()->toDateString(),
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth, 1, 0, 0, 0, $tz)->endOfMonth()->toDateString(),
+            ],
+            'year'  => [
+                \Carbon\Carbon::create($this->selectedYear, 1, 1, 0, 0, 0, $tz)->startOfYear()->toDateString(),
+                \Carbon\Carbon::create($this->selectedYear, 1, 1, 0, 0, 0, $tz)->endOfYear()->toDateString(),
+            ],
+            default => [now($tz)->toDateString(), now($tz)->toDateString()],
+        };
+
+        $query = DailyFloat::whereBetween('date', [$dateFrom, $dateTo]);
+        $branchId = $this->branchId();
+        if ($branchId) {
+            $query->where('branch_id', $branchId);
+        }
+
+        return [
+            'total' => (float) $query->sum('amount'),
+            'days'  => (int)   $query->count(),
+        ];
+    }
+
+    public function getTopupSummary(): array
+    {
+        $tz = 'Pacific/Tarawa';
+
+        [$dateFrom, $dateTo] = match ($this->period) {
+            'day'   => [now($tz)->toDateString(), now($tz)->toDateString()],
+            'week'  => [now($tz)->copy()->startOfWeek()->toDateString(), now($tz)->copy()->endOfWeek()->toDateString()],
+            'month' => [
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth, 1, 0, 0, 0, $tz)->startOfMonth()->toDateString(),
+                \Carbon\Carbon::create($this->selectedYear, $this->selectedMonth, 1, 0, 0, 0, $tz)->endOfMonth()->toDateString(),
+            ],
+            'year'  => [
+                \Carbon\Carbon::create($this->selectedYear, 1, 1, 0, 0, 0, $tz)->startOfYear()->toDateString(),
+                \Carbon\Carbon::create($this->selectedYear, 1, 1, 0, 0, 0, $tz)->endOfYear()->toDateString(),
+            ],
+            default => [now($tz)->toDateString(), now($tz)->toDateString()],
+        };
+
+        $branchId = $this->branchId();
+
+        $query = WalletTopupRequest::whereRaw("DATE(updated_at) BETWEEN ? AND ?", [$dateFrom, $dateTo])
+            ->where('status', 'Approved');
+
+        if ($branchId) {
+            $query->where('branch_id', $branchId);
+        }
+
+        $rows = $query
+            ->select('payment_method', DB::raw('COUNT(*) as count'), DB::raw('COALESCE(SUM(amount), 0) as total'))
+            ->groupBy('payment_method')
+            ->orderByDesc('total')
+            ->get()
+            ->toArray();
+
+        return [
+            'rows'  => $rows,
+            'total' => (float) array_sum(array_column($rows, 'total')),
+            'count' => (int)   array_sum(array_column($rows, 'count')),
+        ];
     }
 
     public function getExpenseSummary(): array

@@ -20,7 +20,7 @@ class EditFlavor extends EditRecord
                 ->label('Remove Image')
                 ->icon('heroicon-o-trash')
                 ->color('danger')
-                ->visible(fn () => (bool) $this->record->image_url)
+                ->visible(fn () => (bool) $this->record->image_url && auth()->user()?->is_admin)
                 ->requiresConfirmation()
                 ->modalHeading('Remove image')
                 ->modalDescription('This will permanently delete the image from the server. Are you sure?')
@@ -32,7 +32,8 @@ class EditFlavor extends EditRecord
                     $this->refreshFormData(['image_url']);
                 }),
 
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->visible(fn () => (bool) auth()->user()?->is_admin),
         ];
     }
 

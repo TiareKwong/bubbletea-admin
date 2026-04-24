@@ -26,6 +26,11 @@ class ProductTypeResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
+    public static function canViewAny(): bool
+    {
+        return (bool) auth()->user()?->is_admin;
+    }
+
     public static function canCreate(): bool
     {
         return (bool) auth()->user()?->is_admin;

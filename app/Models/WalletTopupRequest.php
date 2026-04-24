@@ -21,6 +21,7 @@ class WalletTopupRequest extends Model
 
     protected $fillable = [
         'user_id',
+        'branch_id',
         'amount',
         'payment_method',
         'status',
@@ -31,5 +32,10 @@ class WalletTopupRequest extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(\App\Models\Branch::class);
     }
 }

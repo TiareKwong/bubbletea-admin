@@ -248,6 +248,18 @@ class FlavorResource extends Resource
                         default        => 'gray',
                     }),
 
+                TextColumn::make('availability')
+                    ->label('Available In')
+                    ->badge()
+                    ->getStateUsing(fn (Flavor $record): string|array =>
+                        $record->branches->isEmpty()
+                            ? 'All Branches'
+                            : $record->branches->pluck('name')->toArray()
+                    )
+                    ->color(fn (string $state): string =>
+                        $state === 'All Branches' ? 'success' : 'info'
+                    ),
+
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -297,7 +309,7 @@ class FlavorResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        $query  = parent::getEloquentQuery();
+        $query  = parent::getEloquentQuery()->with('branches');
         $ctx    = app(\App\Services\BranchContext::class);
         $branchId = $ctx->getId();
 

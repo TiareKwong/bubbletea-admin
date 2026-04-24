@@ -19,6 +19,10 @@ class WalletTopupRequestInfolist
                             ->label('Customer')
                             ->formatStateUsing(fn ($state, $record) => trim(($record->user?->first_name ?? '') . ' ' . ($record->user?->last_name ?? ''))),
 
+                        TextEntry::make('branch.name')
+                            ->label('Branch')
+                            ->placeholder('—'),
+
                         TextEntry::make('payment_method')
                             ->label('Payment Method'),
 

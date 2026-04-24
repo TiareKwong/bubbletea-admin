@@ -7,6 +7,7 @@ use App\Filament\Resources\WalletTopupRequests\Pages\ViewWalletTopupRequest;
 use App\Filament\Resources\WalletTopupRequests\Schemas\WalletTopupRequestInfolist;
 use App\Filament\Resources\WalletTopupRequests\Tables\WalletTopupRequestsTable;
 use App\Models\WalletTopupRequest;
+use App\Services\BranchContext;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -33,6 +34,12 @@ class WalletTopupRequestResource extends Resource
     public static function table(Table $table): Table
     {
         return WalletTopupRequestsTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = parent::getEloquentQuery();
+        return app(BranchContext::class)->applyTo($query);
     }
 
     public static function getRelations(): array

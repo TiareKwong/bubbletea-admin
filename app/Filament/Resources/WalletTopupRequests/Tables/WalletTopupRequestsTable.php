@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\WalletTopupRequests\Tables;
 
+use App\Models\Branch;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -39,6 +40,12 @@ class WalletTopupRequestsTable
                         default    => 'warning',
                     }),
 
+                TextColumn::make('branch.name')
+                    ->label('Branch')
+                    ->placeholder('—')
+                    ->badge()
+                    ->color('gray'),
+
                 TextColumn::make('actioned_by')
                     ->label('Actioned By')
                     ->placeholder('—'),
@@ -57,6 +64,11 @@ class WalletTopupRequestsTable
                         'Approved' => 'Approved',
                         'Rejected' => 'Rejected',
                     ]),
+
+                SelectFilter::make('branch_id')
+                    ->label('Branch')
+                    ->options(fn () => Branch::orderBy('name')->pluck('name', 'id')->toArray())
+                    ->placeholder('All Branches'),
             ])
             ->recordActions([
                 ViewAction::make(),
