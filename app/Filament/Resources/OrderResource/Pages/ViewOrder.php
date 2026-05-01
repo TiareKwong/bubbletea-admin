@@ -3,12 +3,18 @@
 namespace App\Filament\Resources\OrderResource\Pages;
 
 use App\Filament\Resources\OrderResource;
+use App\Models\OrderItem;
 use App\Models\Reward;
 use App\Models\WalletTransaction;
 use App\Services\BranchContext;
 use App\Services\PushNotificationService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -172,6 +178,150 @@ class ViewOrder extends ViewRecord
                     PushNotificationService::sendLocalized($order->user_id, 'payment_confirmed', $order->order_code);
 
                     $this->refreshFormData(['order_status', 'points_earned', 'updated_by']);
+                }),
+
+            // Change Payment Method — before the order is paid
+            Action::make('changePaymentMethod')
+                ->label('Change Payment Method')
+                ->icon('heroicon-o-credit-card')
+                ->color('gray')
+                ->visible(fn (): bool =>
+                    $this->canActionOrder() &&
+                    in_array($this->record->order_status, ['Pending Payment', 'Payment Verification', 'Points Verification'])
+                )
+                ->fillForm(fn (): array => [
+                    'payment_method' => $this->record->payment_method,
+                ])
+                ->form([
+                    Select::make('payment_method')
+                        ->label('New Payment Method')
+                        ->options([
+                            'Cash'          => 'Cash',
+                            'EFTPOS'        => 'EFTPOS',
+                            'Bank Transfer' => 'Bank Transfer',
+                        ])
+                        ->required(),
+                ])
+                ->modalHeading('Change Payment Method')
+                ->modalDescription('Update the payment method for this order. The order status will be adjusted accordingly.')
+                ->action(function (array $data): void {
+                    $order  = $this->record;
+                    $method = $data['payment_method'];
+
+                    $order->payment_method = $method;
+
+                    // Adjust status to match the new payment method
+                    if ($method === 'Bank Transfer') {
+                        $order->order_status = 'Payment Verification';
+                    } else {
+                        // Cash or EFTPOS — reset to Pending Payment and clear any points reservation
+                        $order->order_status = 'Pending Payment';
+                        if ($order->reward_redeemed) {
+                            $order->reward_redeemed = false;
+                            $order->points_used     = 0;
+                        }
+                    }
+
+                    $order->updated_by = auth()->user()->getFilamentName();
+                    $order->save();
+
+                    $this->refreshFormData(['payment_method', 'order_status', 'reward_redeemed', 'points_used', 'updated_by']);
+
+                    Notification::make()
+                        ->title('Payment method updated')
+                        ->success()
+                        ->send();
+                }),
+
+            // Edit Order Items — adjust quantities before the order is paid
+            Action::make('editOrderItems')
+                ->label('Edit Order Items')
+                ->icon('heroicon-o-pencil-square')
+                ->color('warning')
+                ->visible(fn (): bool =>
+                    $this->canActionOrder() &&
+                    in_array($this->record->order_status, ['Pending Payment', 'Payment Verification', 'Points Verification'])
+                )
+                ->fillForm(function (): array {
+                    $items = $this->record->orderItems()->with('flavor')->get()->map(function ($item) {
+                        $label = $item->flavor?->name ?? 'Unknown item';
+                        $label .= ' (' . $item->size . ')';
+                        if (! empty($item->toppings)) {
+                            $label .= ' + ' . implode(', ', $item->toppings);
+                        }
+                        $unitPrice = $item->quantity > 0
+                            ? round((float) $item->price / $item->quantity, 4)
+                            : (float) $item->price;
+
+                        return [
+                            'item_id'    => $item->id,
+                            'label'      => $label,
+                            'unit_price' => $unitPrice,
+                            'quantity'   => $item->quantity,
+                        ];
+                    })->values()->toArray();
+
+                    return ['items' => $items];
+                })
+                ->form([
+                    Repeater::make('items')
+                        ->label('Items')
+                        ->schema([
+                            Hidden::make('item_id'),
+                            Hidden::make('unit_price'),
+                            Hidden::make('label'),
+                            Placeholder::make('item_label')
+                                ->label('Item')
+                                ->content(fn (Get $get): string => $get('label') ?? ''),
+                            TextInput::make('quantity')
+                                ->label('Quantity')
+                                ->numeric()
+                                ->integer()
+                                ->minValue(0)
+                                ->required()
+                                ->helperText('Set to 0 to remove this item'),
+                        ])
+                        ->columns(2)
+                        ->addable(false)
+                        ->deletable(false)
+                        ->reorderable(false)
+                        ->columnSpanFull(),
+                ])
+                ->modalHeading('Edit Order Items')
+                ->modalDescription('Adjust quantities below. Set an item to 0 to remove it from the order.')
+                ->action(function (array $data): void {
+                    $order     = $this->record;
+                    $staffName = auth()->user()->getFilamentName();
+                    $newTotal  = 0;
+
+                    foreach ($data['items'] as $itemData) {
+                        $item = OrderItem::find($itemData['item_id']);
+                        if (! $item) continue;
+
+                        $qty = (int) $itemData['quantity'];
+                        if ($qty <= 0) {
+                            $item->delete();
+                        } else {
+                            $unitPrice      = (float) $itemData['unit_price'];
+                            $item->quantity = $qty;
+                            $item->price    = round($qty * $unitPrice, 2);
+                            $item->save();
+                            $newTotal += $item->price;
+                        }
+                    }
+
+                    // Preserve any existing discount
+                    $discount           = (float) ($order->discount_applied ?? 0);
+                    $order->total_price = max(0, round($newTotal - $discount, 2));
+                    $order->updated_by  = $staffName;
+                    $order->save();
+
+                    $this->refreshFormData(['total_price', 'updated_by']);
+
+                    Notification::make()
+                        ->title('Order items updated')
+                        ->success()
+                        ->send();
                 }),
 
             // Mark Preparing — visible once paid
