@@ -31,6 +31,7 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->passwordReset(\App\Filament\Pages\Auth\RequestPasswordReset::class)
             ->darkMode(false)
+            ->sidebarCollapsibleOnDesktop()
 
             // ── Branding ────────────────────────────────────────────────────
             ->brandName("Vicky's Bubble-Fruit Tea")

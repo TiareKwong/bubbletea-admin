@@ -249,6 +249,7 @@ class ViewOrder extends ViewRecord
                 ->visible(fn (): bool =>
                     $this->canActionOrder() &&
                     $this->record->user_id !== null &&
+                    $this->record->user?->email !== 'guest@internal.local' &&
                     $this->record->payment_method === 'Cash' &&
                     in_array($this->record->order_status, ['Paid', 'Preparing', 'Ready', 'Collected']) &&
                     ! WalletTransaction::where('reference', 'Change from order #' . $this->record->order_code)

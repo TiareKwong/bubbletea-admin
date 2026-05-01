@@ -66,12 +66,12 @@ class CreateOrder extends CreateRecord
         $this->pendingItems = [];
 
         foreach ($data['items'] ?? [] as $item) {
-            $unitPrice = (float) ($item['price'] ?? 0);
-            $quantity  = (int)   ($item['quantity'] ?? 1);
-            $totalPrice += round($unitPrice * $quantity, 2);
+            $rowTotal = (float) ($item['price'] ?? 0);
+            $quantity = (int)   ($item['quantity'] ?? 1);
+            $totalPrice += round($rowTotal, 2);
 
             // Transform topping repeater rows → snapshot objects (expanded by qty)
-            $toppingRows = array_values(array_filter((array) ($item['toppings'] ?? [])));
+            $toppingRows = array_values(array_filter((array) ($item['toppings'] ?? []), fn($r) => ! empty($r['topping_id'])));
             $toppings    = [];
             if (! empty($toppingRows)) {
                 $ids        = array_filter(array_column($toppingRows, 'topping_id'));
@@ -102,7 +102,7 @@ class CreateOrder extends CreateRecord
                 'sugar'     => $item['sugar'] ?? null,
                 'toppings'  => $toppings,
                 'quantity'  => $quantity,
-                'price'     => $unitPrice,
+                'price'     => round($rowTotal, 2),
             ];
         }
         unset($data['items']);
@@ -130,7 +130,7 @@ class CreateOrder extends CreateRecord
                 ->pluck('id')->toArray();
             $pointableTotal = collect($this->pendingItems)
                 ->filter(fn($item) => in_array($item['flavor_id'], $pointableIds))
-                ->sum(fn($item) => $item['price'] * $item['quantity']);
+                ->sum(fn($item) => $item['price']);
             $pointsEarned = (int) round($pointableTotal * 10);
             $reward = Reward::firstOrCreate(
                 ['user_id' => $data['user_id']],

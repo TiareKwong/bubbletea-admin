@@ -13,7 +13,10 @@ class ListOrders extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make()->label('New Order'),
+            Actions\Action::make('create')
+                ->label('New Order')
+                ->icon('heroicon-o-plus')
+                ->url(route('filament.admin.pages.pos-terminal')),
         ];
     }
 }

@@ -197,7 +197,7 @@ class OrderResource extends Resource
                                                 ->orderBy('name')
                                                 ->pluck('name', 'id')
                                         )
-                                        ->required()
+                                        ->nullable()
                                         ->live()
                                         ->afterStateUpdated(fn (Get $get, Set $set) => static::recalculateItemPrice($get, $set))
                                         ->columnSpan(1),
@@ -213,7 +213,6 @@ class OrderResource extends Resource
                                             $total   = array_sum(array_column($rows, 'qty'));
                                             return max(1, 4 - ($total - $current));
                                         })
-                                        ->required()
                                         ->live()
                                         ->afterStateUpdated(fn (Get $get, Set $set) => static::recalculateItemPrice($get, $set))
                                         ->columnSpan(1),
@@ -301,7 +300,8 @@ class OrderResource extends Resource
             }
         }
 
-        $set('price', round($basePrice + $toppingTotal, 2));
+        $quantity = max(1, (int) ($get('quantity') ?? 1));
+        $set('price', round(($basePrice + $toppingTotal) * $quantity, 2));
     }
 
     // --------------------------------------------------------------------------

@@ -9,9 +9,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->boolean('is_admin')->default(false)->after('is_staff');
-        });
+        if (! Schema::hasColumn('users', 'is_admin')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->boolean('is_admin')->default(false)->after('is_staff');
+            });
+        }
 
         // Promote all existing staff to admin so nobody gets locked out.
         DB::table('users')->where('is_staff', true)->update(['is_admin' => true]);

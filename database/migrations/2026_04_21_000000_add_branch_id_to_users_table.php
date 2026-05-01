@@ -8,9 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->foreignId('branch_id')->nullable()->after('is_admin')->constrained()->nullOnDelete();
-        });
+        if (! Schema::hasColumn('users', 'branch_id')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->foreignId('branch_id')->nullable()->after('is_admin')->constrained()->nullOnDelete();
+            });
+        }
     }
 
     public function down(): void
