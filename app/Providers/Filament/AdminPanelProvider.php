@@ -32,6 +32,7 @@ class AdminPanelProvider extends PanelProvider
             ->passwordReset(\App\Filament\Pages\Auth\RequestPasswordReset::class)
             ->darkMode(false)
             ->sidebarCollapsibleOnDesktop()
+            ->timezone('Pacific/Tarawa')
 
             // ── Branding ────────────────────────────────────────────────────
             ->brandName("Vicky's Bubble-Fruit Tea")

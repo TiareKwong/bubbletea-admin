@@ -63,7 +63,8 @@ class OrdersRelationManager extends RelationManager
 
                 TextColumn::make('created_at')
                     ->label('Placed')
-                    ->dateTime()
+                    ->dateTime('d M Y, h:i A')
+                    ->timezone('Pacific/Tarawa')
                     ->sortable(),
             ])
             ->paginated([10, 25])

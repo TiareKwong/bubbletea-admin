@@ -61,7 +61,7 @@ class CustomerResource extends Resource
                     TextEntry::make('email')->label('Email'),
                     TextEntry::make('phone_number')->label('Phone')->placeholder('—'),
                     TextEntry::make('birthday')->label('Birthday')->date()->placeholder('—'),
-                    TextEntry::make('created_at')->label('Member Since')->dateTime(),
+                    TextEntry::make('created_at')->label('Member Since')->dateTime('d M Y, h:i A')->timezone('Pacific/Tarawa'),
                     IconEntry::make('is_verified')->label('Email Verified')->boolean(),
                 ]),
 

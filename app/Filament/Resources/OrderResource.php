@@ -89,8 +89,22 @@ class OrderResource extends Resource
                         ),
                 ]),
 
-            // ── Step 2: Items ────────────────────────────────────────────────
-            Section::make('Step 2 — Order Items')
+            // ── Step 2: Branch ───────────────────────────────────────────────
+            Section::make('Step 2 — Branch')
+                ->description('Which branch is this order for? Select this first so the item list filters correctly.')
+                ->icon('heroicon-o-map-pin')
+                ->schema([
+                    Select::make('branch_id')
+                        ->label('Branch')
+                        ->relationship('branch', 'name', fn ($query) => $query->where('is_active', true))
+                        ->default(fn () => app(\App\Services\BranchContext::class)->getId())
+                        ->searchable()
+                        ->preload()
+                        ->live(),
+                ]),
+
+            // ── Step 3: Items ────────────────────────────────────────────────
+            Section::make('Step 3 — Order Items')
                 ->description('Add each drink the customer wants. Click "Add Item" for multiple drinks.')
                 ->icon('heroicon-o-beaker')
                 ->schema([
@@ -104,11 +118,17 @@ class OrderResource extends Resource
                             // Row 1: Flavor (wide) + Size
                             Select::make('flavor_id')
                                 ->label('🧋 Flavor')
-                                ->options(
-                                    Flavor::where('status', 'Available')
-                                        ->orderBy('name')
-                                        ->pluck('name', 'id')
-                                )
+                                ->options(function (Get $get): array {
+                                    $branchId = $get('../../branch_id');
+                                    $query = Flavor::where('status', 'Available')->orderBy('name');
+                                    if ($branchId) {
+                                        $query->where(function ($q) use ($branchId) {
+                                            $q->whereDoesntHave('branches')
+                                              ->orWhereHas('branches', fn ($bq) => $bq->where('branches.id', $branchId));
+                                        });
+                                    }
+                                    return $query->pluck('name', 'id')->toArray();
+                                })
                                 ->required()
                                 ->searchable()
                                 ->live()
@@ -220,20 +240,7 @@ class OrderResource extends Resource
                         ]),
                 ]),
 
-            // ── Step 3: Payment ──────────────────────────────────────────────
-            Section::make('Step 2b — Branch')
-                ->description('Which branch is this order for?')
-                ->icon('heroicon-o-map-pin')
-                ->schema([
-                    Select::make('branch_id')
-                        ->label('Branch')
-                        ->relationship('branch', 'name', fn ($query) => $query->where('is_active', true))
-                        ->default(fn () => app(\App\Services\BranchContext::class)->getId())
-                        ->searchable()
-                        ->preload(),
-                ]),
-
-            Section::make('Step 3 — Payment')
+            Section::make('Step 4 — Payment')
                 ->description('Select how the customer is paying. Only enter a reference for Bank Transfer.')
                 ->icon('heroicon-o-banknotes')
                 ->columns(2)
@@ -398,11 +405,8 @@ class OrderResource extends Resource
 
                     TextEntry::make('created_at')
                         ->label('Placed At')
-                        ->formatStateUsing(fn ($state) => $state
-                            ? \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $state->format('Y-m-d H:i:s'), 'UTC')
-                                ->setTimezone('Pacific/Tarawa')
-                                ->format('d M Y, h:i A')
-                            : '—'),
+                        ->dateTime('d M Y, h:i A')
+                        ->timezone('Pacific/Tarawa'),
 
                     TextEntry::make('updated_by')
                         ->label('Last Updated By')
@@ -623,11 +627,8 @@ class OrderResource extends Resource
 
                 TextColumn::make('created_at')
                     ->label('Placed')
-                    ->formatStateUsing(fn ($state) => $state
-                        ? \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $state->format('Y-m-d H:i:s'), 'UTC')
-                            ->setTimezone('Pacific/Tarawa')
-                            ->format('d M Y, h:i A')
-                        : '—')
+                    ->dateTime('d M Y, h:i A')
+                    ->timezone('Pacific/Tarawa')
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')

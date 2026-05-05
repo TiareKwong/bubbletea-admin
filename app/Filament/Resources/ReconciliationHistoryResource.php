@@ -83,7 +83,7 @@ class ReconciliationHistoryResource extends Resource
                 TextColumn::make('submitted_at')
                     ->label('Submitted at')
                     ->dateTime('d M Y, h:i A')
-                    ->timezone(config('app.timezone'))
+                    ->timezone('Pacific/Tarawa')
                     ->sortable(),
 
                 TextColumn::make('notes')
