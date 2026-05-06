@@ -29,6 +29,7 @@ class Order extends Model
         'free_items',
         'wallet_amount_used',
         'branch_id',
+        'status_log',
     ];
 
     protected function casts(): array
@@ -36,11 +37,23 @@ class Order extends Model
         return [
             'total_price'        => 'decimal:2',
             'wallet_amount_used' => 'decimal:2',
-            'discount_applied' => 'decimal:2',
-            'free_items'       => 'array',
-            'reward_redeemed'  => 'boolean',
-            'collected'        => 'boolean',
+            'discount_applied'   => 'decimal:2',
+            'free_items'         => 'array',
+            'status_log'         => 'array',
+            'reward_redeemed'    => 'boolean',
+            'collected'          => 'boolean',
         ];
+    }
+
+    public function appendStatusLog(string $action, string $staffName): void
+    {
+        $log   = $this->status_log ?? [];
+        $log[] = [
+            'action' => $action,
+            'by'     => $staffName,
+            'at'     => now('Pacific/Tarawa')->format('d M Y, h:i A'),
+        ];
+        $this->status_log = $log;
     }
 
     public function user(): BelongsTo

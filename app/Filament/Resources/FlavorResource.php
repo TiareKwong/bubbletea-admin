@@ -58,10 +58,14 @@ class FlavorResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
+        $isAdmin = (bool) auth()->user()?->is_admin;
+
         return $schema->components([
             TextInput::make('name')
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->visible($isAdmin)
+                ->dehydrated($isAdmin),
 
             Select::make('type')
                 ->options(fn () => ProductType::orderBy('name')
@@ -72,12 +76,16 @@ class FlavorResource extends Resource
                 ->required()
                 ->live()
                 ->columnSpanFull()
-                ->helperText('Manage types under Menu → Product Types. "drink" = full options, "ice_cream" = toppings only, everything else = simple add to cart. Only drink and ice_cream items earn loyalty points.'),
+                ->helperText('Manage types under Menu → Product Types. "drink" = full options, "ice_cream" = toppings only, everything else = simple add to cart. Only drink and ice_cream items earn loyalty points.')
+                ->visible($isAdmin)
+                ->dehydrated($isAdmin),
 
             Select::make('category')
                 ->options(fn () => FlavorCategory::orderBy('name')->pluck('name', 'name')->toArray())
                 ->placeholder('Select a category')
-                ->nullable(),
+                ->nullable()
+                ->visible($isAdmin)
+                ->dehydrated($isAdmin),
 
             Placeholder::make('image_preview')
                 ->label('Current Image')
@@ -86,7 +94,7 @@ class FlavorResource extends Resource
                         ? new HtmlString('<img src="' . e($record->image_url) . '" style="max-height:160px;border-radius:8px;object-fit:contain;">')
                         : '—'
                 )
-                ->visible(fn ($record): bool => (bool) $record?->image_url),
+                ->visible(fn ($record): bool => $isAdmin && (bool) $record?->image_url),
 
             FileUpload::make('image_url')
                 ->label('Image')
@@ -101,28 +109,33 @@ class FlavorResource extends Resource
                 ->imageResizeTargetHeight('800')
                 ->imageResizeMode('contain')
                 ->imageResizeUpscale(false)
-                ->saveUploadedFileUsing(fn (TemporaryUploadedFile $file): string => ImageUploader::upload($file, 'images')),
+                ->saveUploadedFileUsing(fn (TemporaryUploadedFile $file): string => ImageUploader::upload($file, 'images'))
+                ->visible($isAdmin)
+                ->dehydrated($isAdmin),
 
             \Filament\Schemas\Components\Section::make('Small')
                 ->columns(2)
-                ->visible(fn (Get $get): bool => $get('type') === 'drink')
+                ->visible(fn (Get $get): bool => $isAdmin && $get('type') === 'drink')
                 ->schema([
                     TextInput::make('small_price')
                         ->label('Price ($)')
                         ->numeric()
                         ->minValue(0)
                         ->step(0.01)
-                        ->placeholder('Leave blank if not available'),
+                        ->placeholder('Leave blank if not available')
+                        ->dehydrated($isAdmin),
 
                     TextInput::make('small_ml')
                         ->label('Size (ml)')
                         ->numeric()
                         ->minValue(1)
-                        ->placeholder('e.g. 360'),
+                        ->placeholder('e.g. 360')
+                        ->dehydrated($isAdmin),
                 ]),
 
             \Filament\Schemas\Components\Section::make(fn (Get $get): string => $get('type') === 'drink' ? 'Regular' : 'Price')
                 ->columns(2)
+                ->visible($isAdmin)
                 ->schema([
                     TextInput::make('regular_price')
                         ->label('Price ($)')
@@ -130,6 +143,7 @@ class FlavorResource extends Resource
                         ->minValue(0)
                         ->step(0.01)
                         ->placeholder('Leave blank if not available')
+                        ->dehydrated($isAdmin)
                         ->rules([
                             fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
                                 $type    = $get('type') ?? 'drink';
@@ -152,25 +166,28 @@ class FlavorResource extends Resource
                         ->numeric()
                         ->minValue(1)
                         ->placeholder('e.g. 500')
-                        ->visible(fn (Get $get): bool => $get('type') === 'drink'),
+                        ->visible(fn (Get $get): bool => $get('type') === 'drink')
+                        ->dehydrated($isAdmin),
                 ]),
 
             \Filament\Schemas\Components\Section::make('Large')
                 ->columns(2)
-                ->visible(fn (Get $get): bool => $get('type') === 'drink')
+                ->visible(fn (Get $get): bool => $isAdmin && $get('type') === 'drink')
                 ->schema([
                     TextInput::make('large_price')
                         ->label('Price ($)')
                         ->numeric()
                         ->minValue(0)
                         ->step(0.01)
-                        ->placeholder('Leave blank if not available'),
+                        ->placeholder('Leave blank if not available')
+                        ->dehydrated($isAdmin),
 
                     TextInput::make('large_ml')
                         ->label('Size (ml)')
                         ->numeric()
                         ->minValue(1)
-                        ->placeholder('e.g. 700'),
+                        ->placeholder('e.g. 700')
+                        ->dehydrated($isAdmin),
                 ]),
 
             Select::make('status')
@@ -288,9 +305,7 @@ class FlavorResource extends Resource
                     ->label(fn (Flavor $record): string => $record->status === 'Available' ? 'Mark Out of Stock' : 'Mark Available')
                     ->icon(fn (Flavor $record): string => $record->status === 'Available' ? 'heroicon-o-x-circle' : 'heroicon-o-check-circle')
                     ->color(fn (Flavor $record): string => $record->status === 'Available' ? 'danger' : 'success')
-                    ->visible(fn (): bool => (bool) auth()->user()?->is_admin)
                     ->action(function (Flavor $record): void {
-                        abort_unless(auth()->user()?->is_admin, 403);
                         $record->status = $record->status === 'Available' ? 'Out of Stock' : 'Available';
                         $record->save();
                     })

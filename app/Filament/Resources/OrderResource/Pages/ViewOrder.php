@@ -26,20 +26,18 @@ class ViewOrder extends ViewRecord
 
     /**
      * Returns true if the current user can action this order.
-     * Admins can action any order. Staff can only action orders for their active branch.
+     * Admins can action any order. Staff can action orders for whichever branch
+     * they have switched to — this supports staff moving between branches.
      */
     protected function canActionOrder(): bool
     {
         $user = auth()->user();
         if ($user?->is_admin) return true;
 
-        // Use the staff's assigned branch, falling back to the session branch.
-        // This means staff can switch to "All Branches" to find a cross-branch order
-        // but they can still only action orders from their own branch.
-        $staffBranchId = $user?->branch_id ?? app(BranchContext::class)->getId();
-        if (! $staffBranchId) return false;
+        $activeBranchId = app(BranchContext::class)->getId();
+        if (! $activeBranchId) return false;
 
-        return (int) $this->record->branch_id === (int) $staffBranchId;
+        return (int) $this->record->branch_id === (int) $activeBranchId;
     }
 
     public function mount(int|string $record): void
@@ -108,6 +106,7 @@ class ViewOrder extends ViewRecord
                     $order->order_status  = 'Paid';
                     $order->points_earned = $pointsEarned;
                     $order->updated_by    = $staffName;
+                    $order->appendStatusLog('Verified & Marked Paid', $staffName);
                     $order->save();
 
                     PushNotificationService::sendLocalized($order->user_id, 'payment_verified', $order->order_code);
@@ -173,6 +172,7 @@ class ViewOrder extends ViewRecord
                     $order->order_status  = 'Paid';
                     $order->points_earned = $pointsEarned;
                     $order->updated_by    = $staffName;
+                    $order->appendStatusLog('Marked Paid', $staffName);
                     $order->save();
 
                     PushNotificationService::sendLocalized($order->user_id, 'payment_confirmed', $order->order_code);
@@ -222,7 +222,9 @@ class ViewOrder extends ViewRecord
                         }
                     }
 
-                    $order->updated_by = auth()->user()->getFilamentName();
+                    $staffName = auth()->user()->getFilamentName();
+                    $order->updated_by = $staffName;
+                    $order->appendStatusLog('Changed Payment Method to ' . $method, $staffName);
                     $order->save();
 
                     $this->refreshFormData(['payment_method', 'order_status', 'reward_redeemed', 'points_used', 'updated_by']);
@@ -272,7 +274,7 @@ class ViewOrder extends ViewRecord
                             Hidden::make('label'),
                             Placeholder::make('item_label')
                                 ->label('Item')
-                                ->content(fn (Get $get): string => $get('label') ?? ''),
+                                ->content(fn ($get): string => $get('label') ?? ''),
                             TextInput::make('quantity')
                                 ->label('Quantity')
                                 ->numeric()
@@ -334,8 +336,10 @@ class ViewOrder extends ViewRecord
                 ->modalHeading('Start Preparing')
                 ->modalDescription('Mark this order as being prepared?')
                 ->action(function (): void {
+                    $staffName = auth()->user()->getFilamentName();
                     $this->record->order_status = 'Preparing';
-                    $this->record->updated_by   = auth()->user()->getFilamentName();
+                    $this->record->updated_by   = $staffName;
+                    $this->record->appendStatusLog('Started Preparing', $staffName);
                     $this->record->save();
 
                     PushNotificationService::sendLocalized($this->record->user_id, 'order_preparing', $this->record->order_code);
@@ -358,8 +362,10 @@ class ViewOrder extends ViewRecord
                 ->modalHeading('Order Ready')
                 ->modalDescription('Mark this order as ready for collection?')
                 ->action(function (): void {
+                    $staffName = auth()->user()->getFilamentName();
                     $this->record->order_status = 'Ready';
-                    $this->record->updated_by   = auth()->user()->getFilamentName();
+                    $this->record->updated_by   = $staffName;
+                    $this->record->appendStatusLog('Marked Ready', $staffName);
                     $this->record->save();
 
                     PushNotificationService::sendLocalized($this->record->user_id, 'order_ready', $this->record->order_code);
@@ -381,9 +387,11 @@ class ViewOrder extends ViewRecord
                 ->modalHeading('Confirm Collection')
                 ->modalDescription('Mark this order as collected by the customer?')
                 ->action(function (): void {
+                    $staffName = auth()->user()->getFilamentName();
                     $this->record->collected    = true;
                     $this->record->order_status = 'Collected';
-                    $this->record->updated_by   = auth()->user()->getFilamentName();
+                    $this->record->updated_by   = $staffName;
+                    $this->record->appendStatusLog('Marked Collected', $staffName);
                     $this->record->save();
 
                     PushNotificationService::sendLocalized($this->record->user_id, 'order_collected', $this->record->order_code);

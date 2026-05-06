@@ -8,10 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasColumn('wallet_transactions', 'branch_id')) {
+        if (! Schema::hasColumn('wallet_transactions', 'removed_at')) {
             Schema::table('wallet_transactions', function (Blueprint $table) {
-                $table->unsignedBigInteger('branch_id')->nullable()->after('user_id');
-                $table->foreign('branch_id')->references('id')->on('branches')->nullOnDelete();
+                $table->timestamp('removed_at')->nullable()->after('created_at');
+                $table->string('removed_by')->nullable()->after('removed_at');
+                $table->text('removal_reason')->nullable()->after('removed_by');
             });
         }
     }
@@ -19,8 +20,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('wallet_transactions', function (Blueprint $table) {
-            $table->dropForeign(['branch_id']);
-            $table->dropColumn('branch_id');
+            $table->dropColumn(['removed_at', 'removed_by', 'removal_reason']);
         });
     }
 };

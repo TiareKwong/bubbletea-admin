@@ -51,17 +51,23 @@ class ToppingResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
+        $isAdmin = (bool) auth()->user()?->is_admin;
+
         return $schema->components([
             TextInput::make('name')
                 ->required()
-                ->maxLength(100),
+                ->maxLength(100)
+                ->visible($isAdmin)
+                ->dehydrated($isAdmin),
 
             TextInput::make('price')
                 ->label('Price ($)')
                 ->required()
                 ->numeric()
                 ->minValue(0)
-                ->step(0.01),
+                ->step(0.01)
+                ->visible($isAdmin)
+                ->dehydrated($isAdmin),
 
             Placeholder::make('image_preview')
                 ->label('Current Image')
@@ -70,7 +76,7 @@ class ToppingResource extends Resource
                         ? new HtmlString('<img src="' . e($record->image_url) . '" style="max-height:160px;border-radius:8px;object-fit:contain;">')
                         : '—'
                 )
-                ->visible(fn ($record): bool => (bool) $record?->image_url),
+                ->visible(fn ($record): bool => $isAdmin && (bool) $record?->image_url),
 
             FileUpload::make('image_url')
                 ->label('Image')
@@ -85,7 +91,9 @@ class ToppingResource extends Resource
                 ->imageResizeTargetHeight('800')
                 ->imageResizeMode('contain')
                 ->imageResizeUpscale(false)
-                ->saveUploadedFileUsing(fn (TemporaryUploadedFile $file): string => ImageUploader::upload($file, 'images/toppings')),
+                ->saveUploadedFileUsing(fn (TemporaryUploadedFile $file): string => ImageUploader::upload($file, 'images/toppings'))
+                ->visible($isAdmin)
+                ->dehydrated($isAdmin),
 
             Select::make('status')
                 ->options([
@@ -145,9 +153,7 @@ class ToppingResource extends Resource
                     ->label(fn (Topping $record): string => $record->status === 'Available' ? 'Mark Out of Stock' : 'Mark Available')
                     ->icon(fn (Topping $record): string => $record->status === 'Available' ? 'heroicon-o-x-circle' : 'heroicon-o-check-circle')
                     ->color(fn (Topping $record): string => $record->status === 'Available' ? 'danger' : 'success')
-                    ->visible(fn (): bool => (bool) auth()->user()?->is_admin)
                     ->action(function (Topping $record): void {
-                        abort_unless(auth()->user()?->is_admin, 403);
                         $record->status = $record->status === 'Available' ? 'Out of Stock' : 'Available';
                         $record->save();
                     })

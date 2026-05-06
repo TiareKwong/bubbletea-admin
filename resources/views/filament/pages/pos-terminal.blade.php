@@ -25,8 +25,17 @@
     }
 
     $categories = collect($allFlavors)->pluck('category')->unique()->filter()->sort()->values()->toArray();
-    $cartTotal  = round(array_sum(array_column($cart, 'line_total')), 2);
-    $isGuest    = $customerId === 'guest';
+    $cartTotal         = round(array_sum(array_column($cart, 'line_total')), 2);
+    $itemDiscountTotal = round(array_sum(array_map(
+        fn($item) => ($item['item_discount_percent'] ?? 0) > 0
+            ? max(0, round($item['unit_price'] * $item['qty'], 2) - round($item['line_total'], 2))
+            : 0,
+        $cart
+    )), 2);
+    $globalDiscountAmt = $discountPercent > 0 ? round($cartTotal * $discountPercent / 100, 2) : 0.0;
+    $discountAmount    = $globalDiscountAmt; // kept for blade compatibility
+    $finalTotal        = max(0, $cartTotal - $globalDiscountAmt);
+    $isGuest        = $customerId === 'guest';
 
     $modalFlavor  = null;
     $modalPrice   = 0.0;
@@ -74,8 +83,8 @@
         'Wallet'        => ['icon' => '👜', 'label' => 'Wallet'],
         'Points'        => ['icon' => '⭐', 'label' => 'Points'],
     ];
-    $iceOptions   = ['None' => 'No Ice', 'Less' => 'Less Ice', 'Regular' => 'Regular', 'Extra' => 'Extra Ice'];
-    $sugarOptions = ['0%' => '0%', '25%' => '25%', '50%' => '50%', '75%' => '75%', '100%' => '100%'];
+    $iceOptions   = ['Regular Ice' => 'Regular Ice', '1/2 Ice' => '1/2 Ice', 'No Ice' => 'No Ice'];
+    $sugarOptions = ['Regular Sugar' => 'Regular Sugar', '1/2 Sugar' => '1/2 Sugar', '30% Sugar' => '30% Sugar', 'No Sugar' => 'No Sugar'];
 @endphp
 
 @if ($errorMessage)
@@ -89,22 +98,13 @@
     {{-- LEFT: Flavor catalog --}}
     <div style="display:flex;flex-direction:column;flex:1 1 0%;min-width:0;">
 
-        {{-- Search + Branch --}}
-        <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
-            <div style="position:relative;flex:1;">
-                <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search flavors…"
-                    style="width:100%;padding:0.5rem 1rem 0.5rem 2.25rem;border-radius:0.5rem;border:1px solid #e5e7eb;background:white;font-size:0.875rem;color:#111827;outline:none;box-sizing:border-box;">
-                <svg width="16" height="16" style="position:absolute;top:0.625rem;left:0.625rem;color:#9ca3af;pointer-events:none;" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                </svg>
-            </div>
-            <select wire:model.live="selectedBranchId"
-                style="border-radius:0.5rem;border:1px solid #e5e7eb;background:white;font-size:0.875rem;color:#111827;padding:0.5rem 0.75rem;outline:none;">
-                <option value="">All Branches</option>
-                @foreach ($allBranches as $b)
-                    <option value="{{ $b['id'] }}" @selected($selectedBranchId == $b['id'])>{{ $b['name'] }}</option>
-                @endforeach
-            </select>
+        {{-- Search --}}
+        <div style="position:relative;margin-bottom:0.75rem;">
+            <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search flavors…"
+                style="width:100%;padding:0.5rem 1rem 0.5rem 2.25rem;border-radius:0.5rem;border:1px solid #e5e7eb;background:white;font-size:0.875rem;color:#111827;outline:none;box-sizing:border-box;">
+            <svg width="16" height="16" style="position:absolute;top:0.625rem;left:0.625rem;color:#9ca3af;pointer-events:none;" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
         </div>
 
         {{-- Category pills (horizontally scrollable) --}}
@@ -115,7 +115,7 @@
                 All
             </button>
             @foreach ($categories as $cat)
-                <button wire:click="setCategoryFilter('{{ e($cat) }}')"
+                <button wire:click="setCategoryFilter('{{ str_replace("'", "\\'", $cat) }}')"
                     style="flex-shrink:0;padding:0.25rem 0.875rem;border-radius:9999px;font-size:0.75rem;font-weight:500;border:none;cursor:pointer;white-space:nowrap;text-transform:capitalize;background:{{ $categoryFilter === $cat ? '#7c3aed' : '#f3f4f6' }};color:{{ $categoryFilter === $cat ? 'white' : '#4b5563' }};">
                     {{ ucfirst(str_replace('_', ' ', strtolower($cat))) }}
                 </button>
@@ -194,18 +194,25 @@
         <div style="flex:1;overflow-y:auto;padding:0.75rem;">
             @forelse ($cart as $i => $item)
                 <div style="background:#f9fafb;border-radius:0.5rem;padding:0.5rem 0.75rem;margin-bottom:0.5rem;">
+                    @php
+                        $itemDisc = $item['item_discount_percent'] ?? 0;
+                        $originalLineTotal = round($item['unit_price'] * $item['qty'], 2);
+                    @endphp
                     <div style="display:flex;align-items:flex-start;gap:0.5rem;">
                         <div style="flex:1;min-width:0;">
                             <p style="font-size:0.75rem;font-weight:600;color:#1f2937;line-height:1.25;margin:0;">{{ $item['flavor_name'] }}</p>
                             <p style="font-size:0.75rem;color:#6b7280;margin:0;">
-                                {{ $item['size'] }}{{ ($item['ice'] && $item['ice'] !== 'Regular') ? ' · '.$item['ice'].' Ice' : '' }}{{ ($item['sugar'] && $item['sugar'] !== '100%') ? ' · '.$item['sugar'].' Sugar' : '' }}
+                                {{ $item['size'] }}{{ ($item['ice'] && !in_array($item['ice'], ['Regular', 'Regular Ice'])) ? ' · '.(str_ends_with($item['ice'], 'Ice') ? $item['ice'] : $item['ice'].' Ice') : '' }}{{ ($item['sugar'] && !in_array($item['sugar'], ['100%', 'Regular Sugar'])) ? ' · '.(str_ends_with($item['sugar'], 'Sugar') ? $item['sugar'] : $item['sugar'].' Sugar') : '' }}
                             </p>
                             @if ($item['topping_label'])
                                 <p style="font-size:0.75rem;color:#9ca3af;margin:0.125rem 0 0;">{{ $item['topping_label'] }}</p>
                             @endif
                         </div>
                         <div style="flex-shrink:0;text-align:right;">
-                            <p style="font-size:0.75rem;font-weight:700;color:#111827;margin:0;">${{ number_format($item['line_total'],2) }}</p>
+                            @if ($itemDisc > 0)
+                                <p style="font-size:0.7rem;color:#9ca3af;text-decoration:line-through;margin:0;">${{ number_format($originalLineTotal, 2) }}</p>
+                            @endif
+                            <p style="font-size:0.75rem;font-weight:700;color:{{ $itemDisc > 0 ? '#16a34a' : '#111827' }};margin:0;">${{ number_format($item['line_total'],2) }}</p>
                             <div style="display:flex;align-items:center;gap:0.25rem;margin-top:0.25rem;justify-content:flex-end;">
                                 <button wire:click="adjustCartQty({{ $i }}, -1)" style="width:1.25rem;height:1.25rem;border-radius:0.25rem;background:#e5e7eb;color:#374151;font-size:0.75rem;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;">−</button>
                                 <span style="font-size:0.75rem;width:1rem;text-align:center;">{{ $item['qty'] }}</span>
@@ -213,7 +220,16 @@
                             </div>
                         </div>
                     </div>
-                    <div style="display:flex;gap:0.75rem;margin-top:0.375rem;">
+                    {{-- Per-item discount buttons --}}
+                    <div style="display:flex;gap:0.25rem;flex-wrap:wrap;margin-top:0.375rem;">
+                        @foreach ([0, 5, 10, 15, 20, 25] as $pct)
+                            <button wire:click="setItemDiscount({{ $i }}, {{ $pct }})"
+                                style="padding:0.1rem 0.35rem;border-radius:0.3rem;border:1px solid {{ $itemDisc === $pct ? '#7c3aed' : '#e5e7eb' }};background:{{ $itemDisc === $pct ? '#f5f3ff' : 'white' }};color:{{ $itemDisc === $pct ? '#6d28d9' : '#9ca3af' }};font-size:0.65rem;font-weight:600;cursor:pointer;">
+                                {{ $pct === 0 ? 'No disc.' : $pct.'%' }}
+                            </button>
+                        @endforeach
+                    </div>
+                    <div style="display:flex;gap:0.75rem;margin-top:0.3rem;">
                         <button wire:click="editCartItem({{ $i }})" style="font-size:0.75rem;color:#7c3aed;border:none;background:none;cursor:pointer;">Edit</button>
                         <button wire:click="removeCartItem({{ $i }})" style="font-size:0.75rem;color:#f87171;border:none;background:none;cursor:pointer;">Remove</button>
                     </div>
@@ -228,9 +244,43 @@
 
         {{-- Total + Payment + Charge --}}
         <div style="border-top:1px solid #f3f4f6;padding:0.75rem 1rem;">
+
+            {{-- Discount selector --}}
+            <div style="margin-bottom:0.75rem;">
+                <p style="font-size:0.625rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.375rem;">Discount</p>
+                <div style="display:flex;gap:0.375rem;flex-wrap:wrap;">
+                    @foreach ([0, 5, 10, 15, 20, 25] as $pct)
+                        <button wire:click="setDiscount({{ $pct }})"
+                            style="padding:0.25rem 0.625rem;border-radius:0.5rem;border:1px solid {{ $discountPercent === $pct ? '#7c3aed' : '#e5e7eb' }};background:{{ $discountPercent === $pct ? '#f5f3ff' : 'white' }};color:{{ $discountPercent === $pct ? '#6d28d9' : '#6b7280' }};font-size:0.75rem;font-weight:500;cursor:pointer;">
+                            {{ $pct === 0 ? 'None' : $pct.'%' }}
+                        </button>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- Totals --}}
+            @if ($itemDiscountTotal > 0 || $discountPercent > 0)
+                @php $originalCartTotal = round($cartTotal + $itemDiscountTotal, 2); @endphp
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+                    <span style="font-size:0.8rem;color:#6b7280;">Subtotal</span>
+                    <span style="font-size:0.8rem;color:#6b7280;">${{ number_format($originalCartTotal,2) }}</span>
+                </div>
+                @if ($itemDiscountTotal > 0)
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+                    <span style="font-size:0.8rem;color:#16a34a;font-weight:500;">Item discounts</span>
+                    <span style="font-size:0.8rem;color:#16a34a;font-weight:500;">−${{ number_format($itemDiscountTotal,2) }}</span>
+                </div>
+                @endif
+                @if ($discountPercent > 0)
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                    <span style="font-size:0.8rem;color:#16a34a;font-weight:500;">Order discount ({{ $discountPercent }}%)</span>
+                    <span style="font-size:0.8rem;color:#16a34a;font-weight:500;">−${{ number_format($globalDiscountAmt,2) }}</span>
+                </div>
+                @endif
+            @endif
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
                 <span style="font-size:0.875rem;font-weight:600;color:#374151;">Total</span>
-                <span style="font-size:1.25rem;font-weight:700;color:#111827;">${{ number_format($cartTotal,2) }}</span>
+                <span style="font-size:1.25rem;font-weight:700;color:#111827;">${{ number_format($finalTotal,2) }}</span>
             </div>
 
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.375rem;margin-bottom:0.75rem;">
@@ -255,7 +305,7 @@
             <button wire:click="placeOrder" wire:loading.attr="disabled" wire:target="placeOrder"
                 style="width:100%;padding:0.75rem;border-radius:0.75rem;font-weight:700;font-size:0.875rem;border:none;cursor:{{ !empty($cart) ? 'pointer' : 'not-allowed' }};background:{{ !empty($cart) ? '#7c3aed' : '#e5e7eb' }};color:{{ !empty($cart) ? 'white' : '#9ca3af' }};box-shadow:0 1px 3px rgba(0,0,0,0.1);"
                 @if(empty($cart)) disabled @endif>
-                <span wire:loading.remove wire:target="placeOrder">💳 Charge ${{ number_format($cartTotal,2) }}</span>
+                <span wire:loading.remove wire:target="placeOrder">💳 Charge ${{ number_format($finalTotal,2) }}</span>
                 <span wire:loading wire:target="placeOrder">Processing…</span>
             </button>
         </div>
@@ -265,11 +315,15 @@
 {{-- Flavor Config Modal --}}
 @if ($modalOpen && $modalFlavor)
     @php
-        $f        = $modalFlavor;
-        $hasSmall = (float)$f['small_price'] > 0;
-        $hasReg   = (float)$f['regular_price'] > 0;
-        $hasLarge = (float)$f['large_price'] > 0;
-        $isDrink  = in_array($f['type'], ['drink','ice_cream','smoothie']);
+        $f            = $modalFlavor;
+        $hasSmall     = (float)$f['small_price'] > 0;
+        $hasReg       = (float)$f['regular_price'] > 0;
+        $hasLarge     = (float)$f['large_price'] > 0;
+        $isGrabAndSip = $f['type'] === 'grab_and_sip';
+        $isDrink      = in_array($f['type'], ['drink', 'smoothie']);
+        $isIceCream   = $f['type'] === 'ice_cream';
+        $showSize     = !$isGrabAndSip && ($hasSmall || $hasLarge);
+        $showToppings = $isDrink || $isIceCream;
     @endphp
     <div style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:1rem;">
         <div style="position:absolute;inset:0;background:rgba(0,0,0,0.6);" wire:click="closeModal"></div>
@@ -289,7 +343,8 @@
 
             <div style="padding:1.25rem;max-height:68vh;overflow-y:auto;">
 
-                {{-- Size --}}
+                {{-- Size (hidden for grab & sip — only one fixed price, no size choice) --}}
+                @if ($showSize)
                 <div style="margin-bottom:1rem;">
                     <p style="font-size:0.625rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.5rem;">Size</p>
                     <div style="display:flex;gap:0.5rem;">
@@ -310,6 +365,7 @@
                         @endif
                     </div>
                 </div>
+                @endif
 
                 @if ($isDrink)
                 <div style="margin-bottom:1rem;">
@@ -330,7 +386,7 @@
                 </div>
                 @endif
 
-                @if (count($allToppings) > 0)
+                @if ($showToppings && count($allToppings) > 0)
                 <div style="margin-bottom:1rem;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
                         <p style="font-size:0.625rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0;">🫙 Toppings</p>

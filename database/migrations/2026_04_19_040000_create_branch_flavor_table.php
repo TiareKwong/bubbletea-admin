@@ -12,8 +12,7 @@ return new class extends Migration
     {
         Schema::create('branch_flavor', function (Blueprint $table) {
             $table->foreignId('branch_id')->constrained()->cascadeOnDelete();
-            $table->integer('flavor_id');
-            $table->foreign('flavor_id')->references('id')->on('flavors')->cascadeOnDelete();
+            $table->foreignId('flavor_id')->constrained()->cascadeOnDelete();
             $table->primary(['branch_id', 'flavor_id']);
         });
     }

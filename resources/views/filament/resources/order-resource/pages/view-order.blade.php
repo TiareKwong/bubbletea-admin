@@ -80,7 +80,10 @@
                     if (is_string($toppings)) $toppings = json_decode($toppings, true) ?? [];
                     $toppingNames = collect((array) $toppings)
                         ->map(fn($t) => is_array($t) ? ($t['name'] ?? null) : $t)
-                        ->filter()->unique()->values()->implode(', ');
+                        ->filter()
+                        ->countBy()
+                        ->map(fn($count, $name) => $count > 1 ? "{$name} ×{$count}" : $name)
+                        ->values()->implode(', ');
 
                     $isLast = $loop->last;
                 @endphp
@@ -94,7 +97,7 @@
                     <div style="flex:1;min-width:0;">
                         <p style="font-size:0.9375rem;font-weight:700;color:#111827;margin:0;">{{ $item->flavor?->name ?? '—' }}</p>
                         <p style="font-size:0.8rem;color:#6b7280;margin:0.125rem 0 0;">
-                            {{ $item->size }}{{ ($item->ice && $item->ice !== 'Regular') ? ' · '.$item->ice.' Ice' : '' }}{{ ($item->sugar && $item->sugar !== '100%') ? ' · '.$item->sugar.' Sugar' : '' }}
+                            {{ $item->size }}{{ ($item->ice && !in_array($item->ice, ['Regular', 'Regular Ice'])) ? ' · '.(str_ends_with($item->ice, 'Ice') ? $item->ice : $item->ice.' Ice') : '' }}{{ ($item->sugar && !in_array($item->sugar, ['100%', 'Regular Sugar'])) ? ' · '.(str_ends_with($item->sugar, 'Sugar') ? $item->sugar : $item->sugar.' Sugar') : '' }}
                         </p>
                         @if($toppingNames)
                             <p style="font-size:0.775rem;color:#9ca3af;margin:0.2rem 0 0;">🫙 {{ $toppingNames }}</p>
@@ -182,8 +185,24 @@
         @endif
     </div>
 
-    {{-- Updated by --}}
-    @if($order->updated_by)
+    {{-- Activity log --}}
+    @php $log = $order->status_log ?? []; @endphp
+    @if(count($log) > 0)
+    <div style="margin-top:1rem;background:white;border-radius:1rem;border:1px solid #e5e7eb;padding:1rem 1.25rem;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+        <p style="font-size:0.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 0.75rem;">Activity Log</p>
+        <div style="position:relative;padding-left:1.25rem;">
+            {{-- vertical line --}}
+            <div style="position:absolute;left:0.3rem;top:0.4rem;bottom:0.4rem;width:2px;background:#e5e7eb;border-radius:9999px;"></div>
+            @foreach(array_reverse($log) as $entry)
+            <div style="position:relative;margin-bottom:0.625rem;display:flex;flex-direction:column;gap:0.1rem;">
+                <div style="position:absolute;left:-1.25rem;top:0.35rem;width:0.55rem;height:0.55rem;border-radius:9999px;background:#7c3aed;border:2px solid white;box-shadow:0 0 0 1px #e5e7eb;"></div>
+                <span style="font-size:0.825rem;font-weight:600;color:#111827;">{{ $entry['action'] }}</span>
+                <span style="font-size:0.75rem;color:#6b7280;">by <strong>{{ $entry['by'] }}</strong> · {{ $entry['at'] }}</span>
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @elseif($order->updated_by)
     <p style="font-size:0.75rem;color:#9ca3af;margin:0.75rem 0 0;text-align:center;">
         Last updated by {{ $order->updated_by }}
     </p>

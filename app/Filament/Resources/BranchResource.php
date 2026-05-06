@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\BranchResource\Pages;
 use App\Models\Branch;
 use Filament\Resources\Resource;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
@@ -62,6 +63,26 @@ class BranchResource extends Resource
             Toggle::make('is_active')
                 ->label('Active')
                 ->default(true),
+
+            Repeater::make('opening_hours')
+                ->label('Opening Hours')
+                ->schema([
+                    TextInput::make('days')
+                        ->label('Days')
+                        ->placeholder('e.g. Mon – Fri')
+                        ->required()
+                        ->columnSpan(1),
+                    TextInput::make('hours')
+                        ->label('Hours')
+                        ->placeholder('e.g. 9:00 AM – 8:00 PM  or  Closed')
+                        ->required()
+                        ->columnSpan(1),
+                ])
+                ->columns(2)
+                ->addActionLabel('Add Row')
+                ->reorderable()
+                ->collapsible()
+                ->nullable(),
         ]);
     }
 

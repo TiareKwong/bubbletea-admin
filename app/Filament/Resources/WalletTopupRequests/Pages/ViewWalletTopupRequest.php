@@ -34,6 +34,7 @@ class ViewWalletTopupRequest extends ViewRecord
                     // Record transaction
                     WalletTransaction::create([
                         'user_id'     => $request->user_id,
+                        'branch_id'   => $request->branch_id,
                         'type'        => 'topup',
                         'amount'      => $request->amount,
                         'reference'   => 'Request #' . $request->id,

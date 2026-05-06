@@ -11,10 +11,14 @@ use Illuminate\Support\Facades\DB;
 
 class StatsOverviewWidget extends BaseWidget
 {
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 2;
 
-    // Refresh every 60 seconds so staff see up-to-date counts without manual reload.
     protected ?string $pollingInterval = '60s';
+
+    public static function canView(): bool
+    {
+        return (bool) auth()->user()?->is_admin;
+    }
 
     protected function getStats(): array
     {

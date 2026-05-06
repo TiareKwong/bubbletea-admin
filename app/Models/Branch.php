@@ -8,11 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Branch extends Model
 {
-    protected $fillable = ['name', 'address', 'phone', 'is_active'];
+    protected $fillable = ['name', 'address', 'phone', 'is_active', 'opening_hours'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'is_active'     => 'boolean',
+            'opening_hours' => 'array',
+        ];
     }
 
     public function flavors(): BelongsToMany

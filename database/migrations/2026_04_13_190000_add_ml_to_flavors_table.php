@@ -8,11 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('flavors', function (Blueprint $table) {
-            $table->unsignedSmallInteger('small_ml')->nullable()->after('small_price');
-            $table->unsignedSmallInteger('regular_ml')->nullable()->after('regular_price');
-            $table->unsignedSmallInteger('large_ml')->nullable()->after('large_price');
-        });
+        if (! Schema::hasColumn('flavors', 'small_ml')) {
+            Schema::table('flavors', function (Blueprint $table) {
+                $table->unsignedSmallInteger('small_ml')->nullable()->after('small_price');
+                $table->unsignedSmallInteger('regular_ml')->nullable()->after('regular_price');
+                $table->unsignedSmallInteger('large_ml')->nullable()->after('large_price');
+            });
+        }
     }
 
     public function down(): void

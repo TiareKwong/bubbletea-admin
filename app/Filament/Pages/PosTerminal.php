@@ -36,6 +36,7 @@ class PosTerminal extends Page
     public string  $customerSearch = '';
 
     public array   $cart            = [];
+    public int     $discountPercent = 0;
     public string  $paymentMethod   = 'Cash';
     public string  $paymentReference = '';
 
@@ -43,8 +44,8 @@ class PosTerminal extends Page
     public bool    $modalOpen      = false;
     public ?int    $modalFlavorId  = null;
     public string  $modalSize      = 'Regular';
-    public string  $modalIce       = 'Regular';
-    public string  $modalSugar     = '100%';
+    public ?string $modalIce       = 'Regular Ice';
+    public ?string $modalSugar     = 'Regular Sugar';
     public array   $modalToppingMap = [];
     public int     $modalQty       = 1;
     public ?int    $modalEditIndex = null;
@@ -65,12 +66,14 @@ class PosTerminal extends Page
             return;
         }
 
+        $isGrabAndSip = $flavor->type === 'grab_and_sip';
+
         $this->modalFlavorId   = $flavorId;
         $this->modalEditIndex  = null;
         $this->modalQty        = 1;
         $this->modalToppingMap = [];
-        $this->modalIce        = 'Regular';
-        $this->modalSugar      = '100%';
+        $this->modalIce        = $isGrabAndSip ? null : 'Regular Ice';
+        $this->modalSugar      = $isGrabAndSip ? null : 'Regular Sugar';
         $this->modalSize       = (float) $flavor->regular_price > 0 ? 'Regular'
             : ((float) $flavor->small_price > 0 ? 'Small' : 'Large');
         $this->modalOpen       = true;
@@ -104,6 +107,18 @@ class PosTerminal extends Page
     public function setModalSugar(string $sugar): void { $this->modalSugar = $sugar; }
     public function setCategoryFilter(string $cat): void { $this->categoryFilter = $cat; }
     public function setPaymentMethod(string $method): void { $this->paymentMethod = $method; }
+    public function setDiscount(int $percent): void { $this->discountPercent = $percent; }
+
+    public function setItemDiscount(int $index, int $percent): void
+    {
+        $item = $this->cart[$index] ?? null;
+        if (! $item) {
+            return;
+        }
+        $item['item_discount_percent'] = $percent;
+        $item['line_total']            = round($item['unit_price'] * (1 - $percent / 100) * $item['qty'], 2);
+        $this->cart[$index]            = $item;
+    }
 
     public function adjustModalTopping(int $toppingId, int $delta): void
     {
@@ -168,22 +183,31 @@ class PosTerminal extends Page
         $unitPrice = $base + $toppingTotal;
         $lineTotal = round($unitPrice * $this->modalQty, 2);
 
+        $isGrabAndSip = $flavor->type === 'grab_and_sip';
+
         $item = [
-            'flavor_id'     => (int) $this->modalFlavorId,
-            'flavor_name'   => $flavor->name,
-            'flavor_type'   => $flavor->type,
-            'size'          => $this->modalSize,
-            'ice'           => $this->modalIce,
-            'sugar'         => $this->modalSugar,
-            'topping_map'   => $filteredMap,
-            'toppings'      => $toppings,
-            'topping_label' => $toppingLabel,
-            'qty'           => $this->modalQty,
-            'unit_price'    => round($unitPrice, 2),
-            'line_total'    => $lineTotal,
+            'flavor_id'            => (int) $this->modalFlavorId,
+            'flavor_name'          => $flavor->name,
+            'flavor_type'          => $flavor->type,
+            'size'                 => $isGrabAndSip ? null : $this->modalSize,
+            'ice'                  => $isGrabAndSip ? null : $this->modalIce,
+            'sugar'                => $isGrabAndSip ? null : $this->modalSugar,
+            'topping_map'          => $filteredMap,
+            'toppings'             => $toppings,
+            'topping_label'        => $toppingLabel,
+            'qty'                  => $this->modalQty,
+            'unit_price'           => round($unitPrice, 2),
+            'line_total'           => $lineTotal,
+            'item_discount_percent' => 0,
         ];
 
         if ($this->modalEditIndex !== null && isset($this->cart[$this->modalEditIndex])) {
+            // Preserve any per-item discount already applied
+            $existingDiscount = $this->cart[$this->modalEditIndex]['item_discount_percent'] ?? 0;
+            $item['item_discount_percent'] = $existingDiscount;
+            if ($existingDiscount > 0) {
+                $item['line_total'] = round($item['unit_price'] * (1 - $existingDiscount / 100) * $item['qty'], 2);
+            }
             $this->cart[$this->modalEditIndex] = $item;
         } else {
             $this->cart[] = $item;
@@ -204,8 +228,9 @@ class PosTerminal extends Page
         if (! $item) {
             return;
         }
+        $discount           = $item['item_discount_percent'] ?? 0;
         $item['qty']        = max(1, $item['qty'] + $delta);
-        $item['line_total'] = round($item['unit_price'] * $item['qty'], 2);
+        $item['line_total'] = round($item['unit_price'] * (1 - $discount / 100) * $item['qty'], 2);
         $this->cart[$index] = $item;
     }
 
@@ -273,11 +298,14 @@ class PosTerminal extends Page
             return;
         }
 
-        $totalPrice   = 0.0;
-        $pendingItems = [];
+        $subtotal          = 0.0;
+        $itemDiscountTotal = 0.0;
+        $pendingItems      = [];
         foreach ($this->cart as $item) {
-            $rowTotal       = round((float) $item['line_total'], 2);
-            $totalPrice    += $rowTotal;
+            $rowTotal      = round((float) $item['line_total'], 2);
+            $originalTotal = round((float) $item['unit_price'] * $item['qty'], 2);
+            $itemDiscountTotal += max(0.0, $originalTotal - $rowTotal);
+            $subtotal      += $rowTotal;
             $pendingItems[] = [
                 'flavor_id' => $item['flavor_id'],
                 'size'      => $item['size'],
@@ -288,7 +316,13 @@ class PosTerminal extends Page
                 'price'     => $rowTotal,
             ];
         }
-        $totalPrice = round($totalPrice, 2);
+        $subtotal          = round($subtotal, 2);
+        $itemDiscountTotal = round($itemDiscountTotal, 2);
+        $globalDiscount    = $this->discountPercent > 0
+            ? round($subtotal * $this->discountPercent / 100, 2)
+            : 0.0;
+        $discountAmount    = round($itemDiscountTotal + $globalDiscount, 2);
+        $totalPrice        = max(0.0, round($subtotal - $globalDiscount, 2));
 
         $orderStatus = match ($this->paymentMethod) {
             'Cash', 'EFTPOS', 'Wallet' => 'Paid',
@@ -330,6 +364,11 @@ class PosTerminal extends Page
             'reward_redeemed'    => false,
             'collected'          => false,
             'wallet_amount_used' => $walletAmountUsed,
+            'discount_applied'   => $discountAmount > 0 ? $discountAmount : null,
+            'promo_title'        => $discountAmount > 0 ? implode(' + ', array_filter([
+                                        $itemDiscountTotal > 0 ? 'Per-item discounts' : null,
+                                        $this->discountPercent > 0 ? $this->discountPercent . '% order discount' : null,
+                                    ])) : null,
             'updated_by'         => auth()->user()->getFilamentName(),
         ]);
 

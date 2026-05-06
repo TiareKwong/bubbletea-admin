@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('flavors', function (Blueprint $table) {
-            $table->decimal('small_price', 5, 2)->nullable()->after('large_price');
-        });
+        if (! Schema::hasColumn('flavors', 'small_price')) {
+            Schema::table('flavors', function (Blueprint $table) {
+                $table->decimal('small_price', 5, 2)->nullable()->after('large_price');
+            });
+        }
     }
 
     /**

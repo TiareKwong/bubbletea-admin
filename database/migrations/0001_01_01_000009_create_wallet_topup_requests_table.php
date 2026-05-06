@@ -6,29 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('points_topup_requests', function (Blueprint $table) {
+        Schema::create('wallet_topup_requests', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->decimal('amount', 8, 2);
-            $table->integer('points');
+            $table->decimal('amount', 10, 2);
             $table->string('payment_method');
-            $table->enum('status', ['Pending', 'Approved', 'Rejected'])->default('Pending');
+            $table->string('status')->default('Pending');
             $table->text('notes')->nullable();
             $table->string('actioned_by')->nullable();
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('points_topup_requests');
+        Schema::dropIfExists('wallet_topup_requests');
     }
 };

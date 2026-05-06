@@ -8,9 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('promotions', function (Blueprint $table) {
-            $table->string('free_item_size')->default('Any')->after('free_quantity');
-        });
+        if (! Schema::hasColumn('promotions', 'free_item_size')) {
+            Schema::table('promotions', function (Blueprint $table) {
+                $table->string('free_item_size')->default('Any')->after('free_quantity');
+            });
+        }
     }
 
     public function down(): void

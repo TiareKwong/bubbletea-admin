@@ -8,9 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('wallet_topup_requests', function (Blueprint $table) {
-            $table->foreignId('branch_id')->nullable()->after('user_id')->constrained()->nullOnDelete();
-        });
+        if (! Schema::hasColumn('wallet_topup_requests', 'branch_id')) {
+            Schema::table('wallet_topup_requests', function (Blueprint $table) {
+                $table->foreignId('branch_id')->nullable()->after('user_id')->constrained()->nullOnDelete();
+            });
+        }
     }
 
     public function down(): void
