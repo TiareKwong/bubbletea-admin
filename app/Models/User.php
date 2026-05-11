@@ -26,6 +26,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         'password',
         'is_staff',
         'is_admin',
+        'is_super_staff',
         'branch_id',
         'birthday',
         'phone_number',
@@ -44,9 +45,10 @@ class User extends Authenticatable implements FilamentUser, HasName
     {
         return [
             'password'    => 'hashed',
-            'is_staff'    => 'boolean',
-            'is_admin'    => 'boolean',
-            'is_verified' => 'boolean',
+            'is_staff'       => 'boolean',
+            'is_admin'       => 'boolean',
+            'is_super_staff' => 'boolean',
+            'is_verified'    => 'boolean',
             'birthday'    => 'date',
         ];
     }

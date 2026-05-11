@@ -30,6 +30,7 @@ class Order extends Model
         'wallet_amount_used',
         'branch_id',
         'status_log',
+        'is_refill',
     ];
 
     protected function casts(): array
@@ -42,6 +43,7 @@ class Order extends Model
             'status_log'         => 'array',
             'reward_redeemed'    => 'boolean',
             'collected'          => 'boolean',
+            'is_refill'          => 'boolean',
         ];
     }
 

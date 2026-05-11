@@ -169,26 +169,11 @@
         {{-- Left: breakdown + history --------------------------------- --}}
         <div style="padding:1.25rem 1.5rem;border-right:1px solid #f3f4f6;">
 
-            {{-- Opening float (Cash only) --}}
-            @if($method === 'Cash')
-                <div style="margin-bottom:1rem;padding:0.75rem 1rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:0.625rem;">
-                    <p style="font-size:0.7rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.5rem;">Opening Float</p>
-                    <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
-                        <input wire:model.live="floatAmount" type="number" min="0" step="0.01" placeholder="0.00"
-                            style="width:8rem;border:1px solid #93c5fd;border-radius:0.375rem;padding:0.4rem 0.6rem;font-size:0.95rem;font-weight:700;color:#1e40af;background:#fff;outline:none;" />
-                        <button wire:click="saveFloat"
-                            style="background:#1d4ed8;color:#fff;border:none;border-radius:0.375rem;padding:0.4rem 0.85rem;font-size:0.8rem;font-weight:600;cursor:pointer;">
-                            Save
-                        </button>
-                        @if(($data['float_amount'] ?? 0) > 0)
-                            <span style="font-size:0.8rem;color:#1e40af;font-weight:600;">A${{ number_format($data['float_amount'], 2) }} set</span>
-                        @else
-                            <span style="font-size:0.8rem;color:#9ca3af;">Not set</span>
-                        @endif
-                    </div>
-                    @if($floatSetBy)
-                        <p style="font-size:0.7rem;color:#93c5fd;margin:0.35rem 0 0;">Set by {{ $floatSetBy }}{{ $floatUpdatedAt ? ' · '.$floatUpdatedAt : '' }}</p>
-                    @endif
+            {{-- Opening float display (Cash only) --}}
+            @if($method === 'Cash' && ($data['float_amount'] ?? 0) > 0)
+                <div style="margin-bottom:1rem;padding:0.6rem 1rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:0.625rem;display:flex;align-items:center;justify-content:space-between;">
+                    <p style="font-size:0.75rem;font-weight:700;color:#1d4ed8;margin:0;">💰 Opening Float</p>
+                    <span style="font-size:0.9rem;font-weight:700;color:#1e40af;">A${{ number_format($data['float_amount'], 2) }}</span>
                 </div>
             @endif
 

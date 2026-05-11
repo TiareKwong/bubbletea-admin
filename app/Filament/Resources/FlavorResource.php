@@ -324,20 +324,7 @@ class FlavorResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        $query  = parent::getEloquentQuery()->with('branches');
-        $ctx    = app(\App\Services\BranchContext::class);
-        $branchId = $ctx->getId();
-
-        if ($branchId) {
-            // Show flavors with NO branch restrictions (available everywhere)
-            // OR those specifically assigned to this branch.
-            $query->where(function ($q) use ($branchId) {
-                $q->doesntHave('branches')
-                  ->orWhereHas('branches', fn ($bq) => $bq->where('branches.id', $branchId));
-            });
-        }
-
-        return $query;
+        return parent::getEloquentQuery()->with('branches');
     }
 
     public static function getPages(): array

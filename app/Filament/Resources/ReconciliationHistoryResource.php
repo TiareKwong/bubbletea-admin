@@ -27,6 +27,12 @@ class ReconciliationHistoryResource extends Resource
 
     protected static ?string $modelLabel = 'Reconciliation';
 
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        return (bool) ($user?->is_admin || $user?->is_super_staff);
+    }
+
     public static function canCreate(): bool   { return false; }
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool   { return false; }
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool { return (bool) auth()->user()?->is_admin; }

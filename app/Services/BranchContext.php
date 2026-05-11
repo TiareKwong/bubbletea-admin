@@ -8,10 +8,14 @@ class BranchContext
 {
     const SESSION_KEY = 'active_branch_id';
 
+    // 0 stored in session = admin explicitly chose "All Branches"
+    private const ALL_SENTINEL = 0;
+
     public function getId(): ?int
     {
         if (session()->has(self::SESSION_KEY)) {
-            return session(self::SESSION_KEY);
+            $val = session(self::SESSION_KEY);
+            return $val === self::ALL_SENTINEL ? null : $val;
         }
 
         // Default to the user's assigned branch on first load
@@ -29,9 +33,19 @@ class BranchContext
         session([self::SESSION_KEY => $id]);
     }
 
+    public function setAll(): void
+    {
+        session([self::SESSION_KEY => self::ALL_SENTINEL]);
+    }
+
     public function clear(): void
     {
         session()->forget(self::SESSION_KEY);
+    }
+
+    public function isAll(): bool
+    {
+        return session()->has(self::SESSION_KEY) && session(self::SESSION_KEY) === self::ALL_SENTINEL;
     }
 
     public function getBranch(): ?Branch

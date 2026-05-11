@@ -25,6 +25,12 @@ class CashReconciliation extends Page
 
     protected static ?int $navigationSort = 3;
 
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+        return (bool) ($user?->is_admin || $user?->is_super_staff);
+    }
+
     public function getTitle(): string
     {
         $branch = app(BranchContext::class)->getBranch();

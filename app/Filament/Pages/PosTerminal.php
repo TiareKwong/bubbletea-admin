@@ -19,13 +19,11 @@ class PosTerminal extends Page
 {
     protected string $view = 'filament.pages.pos-terminal';
 
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-computer-desktop';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-plus-circle';
 
-    protected static ?string $navigationLabel = 'POS Terminal';
+    protected static ?string $navigationLabel = 'New Order';
 
     protected static ?int $navigationSort = 0;
-
-    protected static bool $shouldRegisterNavigation = false;
 
     // ── UI state (small — safe for Livewire to serialize) ─────────────────────
     public string  $search         = '';
@@ -37,7 +35,7 @@ class PosTerminal extends Page
 
     public array   $cart            = [];
     public int     $discountPercent = 0;
-    public string  $paymentMethod   = 'Cash';
+    public string  $paymentMethod    = 'Cash';
     public string  $paymentReference = '';
 
     // Modal
@@ -50,7 +48,7 @@ class PosTerminal extends Page
     public int     $modalQty       = 1;
     public ?int    $modalEditIndex = null;
 
-    public ?string $errorMessage   = null;
+    public ?string $errorMessage    = null;
 
     public function mount(): void
     {
@@ -109,15 +107,22 @@ class PosTerminal extends Page
     public function setPaymentMethod(string $method): void { $this->paymentMethod = $method; }
     public function setDiscount(int $percent): void { $this->discountPercent = $percent; }
 
-    public function setItemDiscount(int $index, int $percent): void
+    public function toggleItemRefill(int $index): void
     {
         $item = $this->cart[$index] ?? null;
         if (! $item) {
             return;
         }
-        $item['item_discount_percent'] = $percent;
-        $item['line_total']            = round($item['unit_price'] * (1 - $percent / 100) * $item['qty'], 2);
-        $this->cart[$index]            = $item;
+
+        $item['item_is_refill'] = ! ($item['item_is_refill'] ?? false);
+
+        // 10% off base drink price only; toppings stay at full price
+        $effectiveUnit = $item['item_is_refill']
+            ? round($item['base_price'] * 0.9, 2) + ($item['topping_price'] ?? 0)
+            : $item['unit_price'];
+
+        $item['line_total'] = round($effectiveUnit * $item['qty'], 2);
+        $this->cart[$index] = $item;
     }
 
     public function adjustModalTopping(int $toppingId, int $delta): void
@@ -186,27 +191,30 @@ class PosTerminal extends Page
         $isGrabAndSip = $flavor->type === 'grab_and_sip';
 
         $item = [
-            'flavor_id'            => (int) $this->modalFlavorId,
-            'flavor_name'          => $flavor->name,
-            'flavor_type'          => $flavor->type,
-            'size'                 => $isGrabAndSip ? null : $this->modalSize,
-            'ice'                  => $isGrabAndSip ? null : $this->modalIce,
-            'sugar'                => $isGrabAndSip ? null : $this->modalSugar,
-            'topping_map'          => $filteredMap,
-            'toppings'             => $toppings,
-            'topping_label'        => $toppingLabel,
-            'qty'                  => $this->modalQty,
-            'unit_price'           => round($unitPrice, 2),
-            'line_total'           => $lineTotal,
-            'item_discount_percent' => 0,
+            'flavor_id'     => (int) $this->modalFlavorId,
+            'flavor_name'   => $flavor->name,
+            'flavor_type'   => $flavor->type,
+            'size'          => $isGrabAndSip ? null : $this->modalSize,
+            'ice'           => $isGrabAndSip ? null : $this->modalIce,
+            'sugar'         => $isGrabAndSip ? null : $this->modalSugar,
+            'topping_map'   => $filteredMap,
+            'toppings'      => $toppings,
+            'topping_label' => $toppingLabel,
+            'qty'           => $this->modalQty,
+            'base_price'    => round($base, 2),
+            'topping_price' => round($toppingTotal, 2),
+            'unit_price'    => round($unitPrice, 2),
+            'line_total'    => $lineTotal,
+            'item_is_refill' => false,
         ];
 
         if ($this->modalEditIndex !== null && isset($this->cart[$this->modalEditIndex])) {
-            // Preserve any per-item discount already applied
-            $existingDiscount = $this->cart[$this->modalEditIndex]['item_discount_percent'] ?? 0;
-            $item['item_discount_percent'] = $existingDiscount;
-            if ($existingDiscount > 0) {
-                $item['line_total'] = round($item['unit_price'] * (1 - $existingDiscount / 100) * $item['qty'], 2);
+            // Preserve the refill flag already applied
+            $wasRefill = $this->cart[$this->modalEditIndex]['item_is_refill'] ?? false;
+            $item['item_is_refill'] = $wasRefill;
+            if ($wasRefill) {
+                $effectiveUnit = round($item['base_price'] * 0.9, 2) + $item['topping_price'];
+                $item['line_total'] = round($effectiveUnit * $item['qty'], 2);
             }
             $this->cart[$this->modalEditIndex] = $item;
         } else {
@@ -228,9 +236,13 @@ class PosTerminal extends Page
         if (! $item) {
             return;
         }
-        $discount           = $item['item_discount_percent'] ?? 0;
-        $item['qty']        = max(1, $item['qty'] + $delta);
-        $item['line_total'] = round($item['unit_price'] * (1 - $discount / 100) * $item['qty'], 2);
+        $item['qty'] = max(1, $item['qty'] + $delta);
+
+        $effectiveUnit = ($item['item_is_refill'] ?? false)
+            ? round($item['base_price'] * 0.9, 2) + ($item['topping_price'] ?? 0)
+            : $item['unit_price'];
+
+        $item['line_total'] = round($effectiveUnit * $item['qty'], 2);
         $this->cart[$index] = $item;
     }
 
@@ -366,10 +378,11 @@ class PosTerminal extends Page
             'wallet_amount_used' => $walletAmountUsed,
             'discount_applied'   => $discountAmount > 0 ? $discountAmount : null,
             'promo_title'        => $discountAmount > 0 ? implode(' + ', array_filter([
-                                        $itemDiscountTotal > 0 ? 'Per-item discounts' : null,
+                                        $itemDiscountTotal > 0 ? 'Refill discounts' : null,
                                         $this->discountPercent > 0 ? $this->discountPercent . '% order discount' : null,
                                     ])) : null,
             'updated_by'         => auth()->user()->getFilamentName(),
+            'is_refill'          => collect($this->cart)->contains(fn ($i) => $i['item_is_refill'] ?? false),
         ]);
 
         foreach ($pendingItems as $item) {

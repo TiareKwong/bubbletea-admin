@@ -27,7 +27,7 @@
     $categories = collect($allFlavors)->pluck('category')->unique()->filter()->sort()->values()->toArray();
     $cartTotal         = round(array_sum(array_column($cart, 'line_total')), 2);
     $itemDiscountTotal = round(array_sum(array_map(
-        fn($item) => ($item['item_discount_percent'] ?? 0) > 0
+        fn($item) => ($item['item_is_refill'] ?? false)
             ? max(0, round($item['unit_price'] * $item['qty'], 2) - round($item['line_total'], 2))
             : 0,
         $cart
@@ -156,37 +156,60 @@
     {{-- RIGHT: Cart --}}
     <div style="display:flex;flex-direction:column;flex-shrink:0;width:300px;background:white;border-radius:0.75rem;border:1px solid #e5e7eb;overflow:hidden;position:sticky;top:1rem;height:calc(100vh - 8rem);">
 
-        {{-- Customer --}}
-        <div style="padding:1rem 1rem 0.75rem;border-bottom:1px solid #f3f4f6;">
-            <p style="font-size:0.625rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.5rem;">Customer</p>
-            @if ($isGuest)
-                <div style="position:relative;">
-                    <input wire:model.live.debounce.400ms="customerSearch" type="text"
-                        placeholder="Walk-in or search…"
-                        style="width:100%;font-size:0.75rem;padding:0.5rem 0.75rem;border-radius:0.5rem;border:1px solid #e5e7eb;background:#f9fafb;color:#1f2937;outline:none;box-sizing:border-box;">
-                    @if (count($customers) > 0)
-                        <div style="position:absolute;z-index:10;width:100%;margin-top:0.25rem;background:white;border:1px solid #e5e7eb;border-radius:0.5rem;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;">
-                            @foreach ($customers as $c)
-                                <button wire:click="selectCustomer({{ $c['id'] }})" style="width:100%;text-align:left;padding:0.5rem 0.75rem;border:none;background:none;cursor:pointer;">
-                                    <p style="font-size:0.75rem;font-weight:500;color:#1f2937;margin:0;">{{ $c['first_name'] }} {{ $c['last_name'] }}</p>
-                                    <p style="font-size:0.75rem;color:#9ca3af;margin:0;">{{ $c['email'] }} · ${{ number_format((float)$c['wallet_balance'],2) }}</p>
-                                </button>
-                            @endforeach
-                        </div>
-                    @elseif (strlen(trim($customerSearch)) >= 2)
-                        <div style="position:absolute;z-index:10;width:100%;margin-top:0.25rem;background:white;border:1px solid #e5e7eb;border-radius:0.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.1);padding:0.5rem 0.75rem;">
-                            <p style="font-size:0.75rem;color:#9ca3af;margin:0;">No matching customers</p>
-                        </div>
-                    @endif
-                </div>
-            @else
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <div>
-                        <p style="font-size:0.75rem;font-weight:600;color:#7c3aed;margin:0;">{{ $selectedCustomer['first_name'] ?? '' }} {{ $selectedCustomer['last_name'] ?? '' }}</p>
-                        <p style="font-size:0.75rem;color:#9ca3af;margin:0;">💰 ${{ number_format((float)($selectedCustomer['wallet_balance'] ?? 0),2) }}</p>
+        {{-- Customer + Payment --}}
+        <div style="padding:0.75rem 1rem;border-bottom:1px solid #f3f4f6;">
+            {{-- Customer row --}}
+            <div style="margin-bottom:0.6rem;">
+                <p style="font-size:0.625rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.4rem;">Customer</p>
+                @if ($isGuest)
+                    <div style="position:relative;">
+                        <input wire:model.live.debounce.400ms="customerSearch" type="text"
+                            placeholder="Walk-in or search…"
+                            style="width:100%;font-size:0.75rem;padding:0.5rem 0.75rem;border-radius:0.5rem;border:1px solid #e5e7eb;background:#f9fafb;color:#1f2937;outline:none;box-sizing:border-box;">
+                        @if (count($customers) > 0)
+                            <div style="position:absolute;z-index:10;width:100%;margin-top:0.25rem;background:white;border:1px solid #e5e7eb;border-radius:0.5rem;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;">
+                                @foreach ($customers as $c)
+                                    <button wire:click="selectCustomer({{ $c['id'] }})" style="width:100%;text-align:left;padding:0.5rem 0.75rem;border:none;background:none;cursor:pointer;">
+                                        <p style="font-size:0.75rem;font-weight:500;color:#1f2937;margin:0;">{{ $c['first_name'] }} {{ $c['last_name'] }}</p>
+                                        <p style="font-size:0.75rem;color:#9ca3af;margin:0;">{{ $c['email'] }} · ${{ number_format((float)$c['wallet_balance'],2) }}</p>
+                                    </button>
+                                @endforeach
+                            </div>
+                        @elseif (strlen(trim($customerSearch)) >= 2)
+                            <div style="position:absolute;z-index:10;width:100%;margin-top:0.25rem;background:white;border:1px solid #e5e7eb;border-radius:0.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.1);padding:0.5rem 0.75rem;">
+                                <p style="font-size:0.75rem;color:#9ca3af;margin:0;">No matching customers</p>
+                            </div>
+                        @endif
                     </div>
-                    <button wire:click="clearCustomer" style="font-size:0.875rem;color:#9ca3af;border:none;background:none;cursor:pointer;">✕</button>
-                </div>
+                @else
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div>
+                            <p style="font-size:0.75rem;font-weight:600;color:#7c3aed;margin:0;">{{ $selectedCustomer['first_name'] ?? '' }} {{ $selectedCustomer['last_name'] ?? '' }}</p>
+                            <p style="font-size:0.75rem;color:#9ca3af;margin:0;">💰 ${{ number_format((float)($selectedCustomer['wallet_balance'] ?? 0),2) }}</p>
+                        </div>
+                        <button wire:click="clearCustomer" style="font-size:0.875rem;color:#9ca3af;border:none;background:none;cursor:pointer;">✕</button>
+                    </div>
+                @endif
+            </div>
+
+            {{-- Payment method compact strip --}}
+            <p style="font-size:0.625rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.4rem;">Payment</p>
+            <div style="display:flex;gap:0.3rem;">
+                @foreach ($paymentMethods as $method => $info)
+                    @php $disabled = in_array($method, ['Wallet','Points']) && $isGuest; @endphp
+                    <button
+                        @if(!$disabled) wire:click="setPaymentMethod('{{ $method }}')" @endif
+                        style="flex:1;display:flex;flex-direction:column;align-items:center;padding:0.35rem 0.1rem;border-radius:0.4rem;font-size:0.65rem;font-weight:500;cursor:{{ $disabled ? 'not-allowed' : 'pointer' }};opacity:{{ $disabled ? '0.35' : '1' }};border:1.5px solid {{ $paymentMethod === $method ? '#7c3aed' : '#e5e7eb' }};background:{{ $paymentMethod === $method ? '#f5f3ff' : 'white' }};color:{{ $paymentMethod === $method ? '#6d28d9' : ($disabled ? '#d1d5db' : '#6b7280') }};"
+                        @if($disabled) disabled @endif
+                    >
+                        <span style="font-size:0.95rem;line-height:1.2;">{{ $info['icon'] }}</span>
+                        <span>{{ $info['label'] }}</span>
+                    </button>
+                @endforeach
+            </div>
+            @if ($paymentMethod === 'Bank Transfer')
+                <input wire:model.live="paymentReference" type="text" placeholder="Transfer reference…"
+                    style="width:100%;font-size:0.75rem;padding:0.4rem 0.75rem;border-radius:0.5rem;border:1px solid #e5e7eb;background:#f9fafb;color:#1f2937;outline:none;box-sizing:border-box;margin-top:0.5rem;">
             @endif
         </div>
 
@@ -195,7 +218,7 @@
             @forelse ($cart as $i => $item)
                 <div style="background:#f9fafb;border-radius:0.5rem;padding:0.5rem 0.75rem;margin-bottom:0.5rem;">
                     @php
-                        $itemDisc = $item['item_discount_percent'] ?? 0;
+                        $isItemRefill      = $item['item_is_refill'] ?? false;
                         $originalLineTotal = round($item['unit_price'] * $item['qty'], 2);
                     @endphp
                     <div style="display:flex;align-items:flex-start;gap:0.5rem;">
@@ -209,10 +232,10 @@
                             @endif
                         </div>
                         <div style="flex-shrink:0;text-align:right;">
-                            @if ($itemDisc > 0)
+                            @if ($isItemRefill)
                                 <p style="font-size:0.7rem;color:#9ca3af;text-decoration:line-through;margin:0;">${{ number_format($originalLineTotal, 2) }}</p>
                             @endif
-                            <p style="font-size:0.75rem;font-weight:700;color:{{ $itemDisc > 0 ? '#16a34a' : '#111827' }};margin:0;">${{ number_format($item['line_total'],2) }}</p>
+                            <p style="font-size:0.75rem;font-weight:700;color:{{ $isItemRefill ? '#16a34a' : '#111827' }};margin:0;">${{ number_format($item['line_total'],2) }}</p>
                             <div style="display:flex;align-items:center;gap:0.25rem;margin-top:0.25rem;justify-content:flex-end;">
                                 <button wire:click="adjustCartQty({{ $i }}, -1)" style="width:1.25rem;height:1.25rem;border-radius:0.25rem;background:#e5e7eb;color:#374151;font-size:0.75rem;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;">−</button>
                                 <span style="font-size:0.75rem;width:1rem;text-align:center;">{{ $item['qty'] }}</span>
@@ -220,18 +243,16 @@
                             </div>
                         </div>
                     </div>
-                    {{-- Per-item discount buttons --}}
-                    <div style="display:flex;gap:0.25rem;flex-wrap:wrap;margin-top:0.375rem;">
-                        @foreach ([0, 5, 10, 15, 20, 25] as $pct)
-                            <button wire:click="setItemDiscount({{ $i }}, {{ $pct }})"
-                                style="padding:0.1rem 0.35rem;border-radius:0.3rem;border:1px solid {{ $itemDisc === $pct ? '#7c3aed' : '#e5e7eb' }};background:{{ $itemDisc === $pct ? '#f5f3ff' : 'white' }};color:{{ $itemDisc === $pct ? '#6d28d9' : '#9ca3af' }};font-size:0.65rem;font-weight:600;cursor:pointer;">
-                                {{ $pct === 0 ? 'No disc.' : $pct.'%' }}
-                            </button>
-                        @endforeach
-                    </div>
-                    <div style="display:flex;gap:0.75rem;margin-top:0.3rem;">
-                        <button wire:click="editCartItem({{ $i }})" style="font-size:0.75rem;color:#7c3aed;border:none;background:none;cursor:pointer;">Edit</button>
-                        <button wire:click="removeCartItem({{ $i }})" style="font-size:0.75rem;color:#f87171;border:none;background:none;cursor:pointer;">Remove</button>
+                    {{-- Refill toggle + Edit/Remove --}}
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.375rem;">
+                        <button wire:click="toggleItemRefill({{ $i }})"
+                            style="padding:0.15rem 0.5rem;border-radius:0.3rem;border:1px solid {{ $isItemRefill ? '#7c3aed' : '#e5e7eb' }};background:{{ $isItemRefill ? '#f5f3ff' : 'white' }};color:{{ $isItemRefill ? '#6d28d9' : '#9ca3af' }};font-size:0.65rem;font-weight:600;cursor:pointer;">
+                            &#9851; {{ $isItemRefill ? 'Refill · −10% base' : 'Refill' }}
+                        </button>
+                        <div style="display:flex;gap:0.75rem;">
+                            <button wire:click="editCartItem({{ $i }})" style="font-size:0.75rem;color:#7c3aed;border:none;background:none;cursor:pointer;">Edit</button>
+                            <button wire:click="removeCartItem({{ $i }})" style="font-size:0.75rem;color:#f87171;border:none;background:none;cursor:pointer;">Remove</button>
+                        </div>
                     </div>
                 </div>
             @empty
@@ -246,9 +267,13 @@
         <div style="border-top:1px solid #f3f4f6;padding:0.75rem 1rem;">
 
             {{-- Discount selector --}}
-            <div style="margin-bottom:0.75rem;">
-                <p style="font-size:0.625rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.375rem;">Discount</p>
-                <div style="display:flex;gap:0.375rem;flex-wrap:wrap;">
+            <div x-data="{ open: {{ $discountPercent > 0 ? 'true' : 'false' }} }" style="margin-bottom:0.75rem;">
+                <button @click="open = !open"
+                    style="font-size:0.7rem;font-weight:600;color:{{ $discountPercent > 0 ? '#6d28d9' : '#9ca3af' }};background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:0.3rem;margin-bottom:0.375rem;">
+                    <span x-text="open ? '▾' : '▸'" style="font-size:0.6rem;"></span>
+                    {{ $discountPercent > 0 ? 'Order discount · '.$discountPercent.'%' : 'Apply order discount' }}
+                </button>
+                <div x-show="open" x-cloak style="display:flex;gap:0.375rem;flex-wrap:wrap;">
                     @foreach ([0, 5, 10, 15, 20, 25] as $pct)
                         <button wire:click="setDiscount({{ $pct }})"
                             style="padding:0.25rem 0.625rem;border-radius:0.5rem;border:1px solid {{ $discountPercent === $pct ? '#7c3aed' : '#e5e7eb' }};background:{{ $discountPercent === $pct ? '#f5f3ff' : 'white' }};color:{{ $discountPercent === $pct ? '#6d28d9' : '#6b7280' }};font-size:0.75rem;font-weight:500;cursor:pointer;">
@@ -267,7 +292,7 @@
                 </div>
                 @if ($itemDiscountTotal > 0)
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
-                    <span style="font-size:0.8rem;color:#16a34a;font-weight:500;">Item discounts</span>
+                    <span style="font-size:0.8rem;color:#16a34a;font-weight:500;">Refill discounts</span>
                     <span style="font-size:0.8rem;color:#16a34a;font-weight:500;">−${{ number_format($itemDiscountTotal,2) }}</span>
                 </div>
                 @endif
@@ -282,25 +307,6 @@
                 <span style="font-size:0.875rem;font-weight:600;color:#374151;">Total</span>
                 <span style="font-size:1.25rem;font-weight:700;color:#111827;">${{ number_format($finalTotal,2) }}</span>
             </div>
-
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.375rem;margin-bottom:0.75rem;">
-                @foreach ($paymentMethods as $method => $info)
-                    @php $disabled = in_array($method, ['Wallet','Points']) && $isGuest; @endphp
-                    <button
-                        @if(!$disabled) wire:click="setPaymentMethod('{{ $method }}')" @endif
-                        style="display:flex;flex-direction:column;align-items:center;padding:0.5rem 0.25rem;border-radius:0.5rem;font-size:0.75rem;font-weight:500;cursor:{{ $disabled ? 'not-allowed' : 'pointer' }};opacity:{{ $disabled ? '0.4' : '1' }};border:1px solid {{ $paymentMethod === $method ? '#7c3aed' : '#e5e7eb' }};background:{{ $paymentMethod === $method ? '#f5f3ff' : 'white' }};color:{{ $paymentMethod === $method ? '#6d28d9' : ($disabled ? '#d1d5db' : '#6b7280') }};"
-                        @if($disabled) disabled @endif
-                    >
-                        <span style="font-size:1.1rem;line-height:1;">{{ $info['icon'] }}</span>
-                        <span>{{ $info['label'] }}</span>
-                    </button>
-                @endforeach
-            </div>
-
-            @if ($paymentMethod === 'Bank Transfer')
-                <input wire:model.live="paymentReference" type="text" placeholder="Transfer reference…"
-                    style="width:100%;font-size:0.75rem;padding:0.5rem 0.75rem;border-radius:0.5rem;border:1px solid #e5e7eb;background:#f9fafb;color:#1f2937;outline:none;box-sizing:border-box;margin-bottom:0.75rem;">
-            @endif
 
             <button wire:click="placeOrder" wire:loading.attr="disabled" wire:target="placeOrder"
                 style="width:100%;padding:0.75rem;border-radius:0.75rem;font-weight:700;font-size:0.875rem;border:none;cursor:{{ !empty($cart) ? 'pointer' : 'not-allowed' }};background:{{ !empty($cart) ? '#7c3aed' : '#e5e7eb' }};color:{{ !empty($cart) ? 'white' : '#9ca3af' }};box-shadow:0 1px 3px rgba(0,0,0,0.1);"

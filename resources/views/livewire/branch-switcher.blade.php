@@ -28,13 +28,15 @@
                background:#fff; border-radius:0.75rem; box-shadow:0 10px 25px rgba(0,0,0,0.15);
                border:1px solid #e5e7eb; z-index:9999; overflow:hidden;"
     >
-        @if($isAdmin && $activeBranch)
+        @if($canViewAll)
         <button
-            wire:click="clearBranch"
+            wire:click="viewAllBranches"
             style="width:100%; text-align:left; padding:0.625rem 1rem; font-size:0.8125rem;
-                   color:#9ca3af; background:none; border:none; border-bottom:1px solid #f3f4f6;
+                   {{ $isAll ? 'color:#92400e; font-weight:600; background:#fef3c7;' : 'color:#9ca3af; background:none;' }}
+                   border:none; border-bottom:1px solid #f3f4f6;
                    cursor:pointer; display:flex; align-items:center; gap:0.5rem;"
-            onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='none'"
+            onmouseover="this.style.background='{{ $isAll ? '#fde68a' : '#f9fafb' }}'"
+            onmouseout="this.style.background='{{ $isAll ? '#fef3c7' : 'none' }}'"
         >
             <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>

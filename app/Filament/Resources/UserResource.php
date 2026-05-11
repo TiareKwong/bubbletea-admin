@@ -90,6 +90,11 @@ class UserResource extends Resource
                     ->default(true)
                     ->inline(false),
 
+                Toggle::make('is_super_staff')
+                    ->label('Super Staff')
+                    ->helperText('Can access Daily Reconciliation, Staff Reimbursements, and Reconciliation History.')
+                    ->inline(false),
+
                 Toggle::make('is_admin')
                     ->label('Admin (full access)')
                     ->helperText('Admins can create, edit, and delete menu items, toppings, and promotions.')
@@ -129,13 +134,17 @@ class UserResource extends Resource
                     ->badge()
                     ->color('primary'),
 
-                IconColumn::make('is_admin')
-                    ->label('Admin')
-                    ->boolean()
-                    ->trueIcon('heroicon-o-shield-check')
-                    ->falseIcon('heroicon-o-user')
-                    ->trueColor('warning')
-                    ->falseColor('gray'),
+                TextColumn::make('role')
+                    ->label('Role')
+                    ->badge()
+                    ->getStateUsing(fn (User $record): string =>
+                        $record->is_admin ? 'Admin' : ($record->is_super_staff ? 'Super Staff' : 'Staff')
+                    )
+                    ->color(fn (string $state): string => match ($state) {
+                        'Admin'       => 'warning',
+                        'Super Staff' => 'info',
+                        default       => 'gray',
+                    }),
 
                 IconColumn::make('is_staff')
                     ->label('Active')
@@ -145,12 +154,19 @@ class UserResource extends Resource
             ])
             ->defaultSort('first_name')
             ->filters([
-                SelectFilter::make('is_admin')
+                SelectFilter::make('role')
                     ->label('Role')
                     ->options([
-                        '1' => 'Admin',
-                        '0' => 'Staff',
-                    ]),
+                        'admin'       => 'Admin',
+                        'super_staff' => 'Super Staff',
+                        'staff'       => 'Staff',
+                    ])
+                    ->query(fn ($query, $state) => match ($state['value'] ?? null) {
+                        'admin'       => $query->where('is_admin', true),
+                        'super_staff' => $query->where('is_admin', false)->where('is_super_staff', true),
+                        'staff'       => $query->where('is_admin', false)->where('is_super_staff', false),
+                        default       => $query,
+                    }),
             ])
             ->actions([
                 EditAction::make(),
