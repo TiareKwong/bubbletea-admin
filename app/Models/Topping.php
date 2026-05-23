@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Topping extends Model
 {
@@ -13,6 +14,11 @@ class Topping extends Model
         'image_url',
         'status',
     ];
+
+    public function branches(): BelongsToMany
+    {
+        return $this->belongsToMany(Branch::class, 'branch_topping');
+    }
 
     protected function casts(): array
     {

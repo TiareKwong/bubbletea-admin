@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Models\Order;
 use App\Services\BranchContext;
 use App\Services\PushNotificationService;
+use App\Services\StaffPushService;
 use Filament\Widgets\Widget;
 
 class OrderQueueWidget extends Widget
@@ -16,6 +17,10 @@ class OrderQueueWidget extends Widget
     protected int|string|array $columnSpan = 'full';
 
     protected ?string $pollingInterval = '15s';
+
+    // Tracks which Paid order IDs were seen on the previous poll
+    public array $knownPaidIds = [];
+    public bool $initialized   = false;
 
     protected function getViewData(): array
     {
@@ -31,10 +36,26 @@ class OrderQueueWidget extends Widget
         }
 
         $orders = $query->get();
+        $paid   = $orders->where('order_status', 'Paid');
+
+        $currentPaidIds = $paid->pluck('id')->sort()->values()->toArray();
+
+        if ($this->initialized && array_diff($currentPaidIds, $this->knownPaidIds)) {
+            $this->dispatch('new-order-alert');
+
+            // Send Web Push to all subscribed staff devices
+            $newOrders = $paid->whereIn('id', array_diff($currentPaidIds, $this->knownPaidIds));
+            foreach ($newOrders as $newOrder) {
+                StaffPushService::notifyNewOrder($newOrder->order_code, $newOrder->branch_id);
+            }
+        }
+
+        $this->knownPaidIds = $currentPaidIds;
+        $this->initialized  = true;
 
         return [
             'orders'    => $orders,
-            'paid'      => $orders->where('order_status', 'Paid'),
+            'paid'      => $paid,
             'preparing' => $orders->where('order_status', 'Preparing'),
             'ready'     => $orders->where('order_status', 'Ready'),
         ];

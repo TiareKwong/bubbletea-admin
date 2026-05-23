@@ -1,5 +1,47 @@
 <x-filament-widgets::widget>
-    <div wire:poll.60s>
+    {{-- Sound alert: plays a double-beep when a new Paid order arrives --}}
+    <div
+        x-data="{
+            audioCtx: null,
+            init() {
+                // Unlock audio on first user interaction (browser autoplay policy)
+                const unlock = () => {
+                    if (!this.audioCtx) {
+                        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    if (this.audioCtx.state === 'suspended') {
+                        this.audioCtx.resume();
+                    }
+                };
+                document.addEventListener('click', unlock);
+                document.addEventListener('keydown', unlock);
+            },
+            playBeep() {
+                try {
+                    if (!this.audioCtx) {
+                        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    const ctx = this.audioCtx;
+                    if (ctx.state === 'suspended') ctx.resume();
+                    [0, 220].forEach(delay => {
+                        const osc  = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.type = 'sine';
+                        osc.frequency.value = 880;
+                        gain.gain.setValueAtTime(0.4, ctx.currentTime + delay / 1000);
+                        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay / 1000 + 0.25);
+                        osc.start(ctx.currentTime + delay / 1000);
+                        osc.stop(ctx.currentTime + delay / 1000 + 0.25);
+                    });
+                } catch(e) {}
+            }
+        }"
+        x-on:new-order-alert.window="playBeep()"
+    ></div>
+
+    <div wire:poll.15s>
     <x-filament::section>
         <x-slot name="heading">Order Queue</x-slot>
         <x-slot name="description">Live order docket — oldest orders shown first. Updates every minute.</x-slot>

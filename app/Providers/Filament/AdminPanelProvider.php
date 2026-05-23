@@ -85,7 +85,10 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::TOPBAR_END,
-                fn (): string => Blade::render('@livewire(\'branch-switcher\')'),
+                fn (): string => Blade::render(
+                    '@livewire(\'branch-switcher\') <x-staff-push-init :branch-id="$branchId" />',
+                    ['branchId' => app(\App\Services\BranchContext::class)->getId()]
+                ),
             );
     }
 }

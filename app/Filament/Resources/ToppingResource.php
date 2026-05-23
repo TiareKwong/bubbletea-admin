@@ -102,6 +102,19 @@ class ToppingResource extends Resource
                 ])
                 ->required()
                 ->default('Available'),
+
+            \Filament\Schemas\Components\Section::make('Branch Availability')
+                ->description('Leave empty = available at ALL branches. Select specific branches to restrict.')
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                    Select::make('branches')
+                        ->label('Available at Branches')
+                        ->multiple()
+                        ->relationship('branches', 'name', fn ($query) => $query->where('is_active', true))
+                        ->preload()
+                        ->placeholder('All branches (no restriction)'),
+                ]),
         ]);
     }
 
@@ -130,6 +143,18 @@ class ToppingResource extends Resource
                         'Out of Stock' => 'danger',
                         default        => 'gray',
                     }),
+
+                TextColumn::make('availability')
+                    ->label('Available In')
+                    ->badge()
+                    ->getStateUsing(fn (Topping $record): string|array =>
+                        $record->branches->isEmpty()
+                            ? 'All Branches'
+                            : $record->branches->pluck('name')->toArray()
+                    )
+                    ->color(fn (string $state): string =>
+                        $state === 'All Branches' ? 'success' : 'info'
+                    ),
 
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -168,6 +193,11 @@ class ToppingResource extends Resource
                     ->visible(fn () => (bool) auth()->user()?->is_admin),
             ])
             ->defaultSort('name');
+    }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()->with('branches');
     }
 
     public static function getPages(): array
