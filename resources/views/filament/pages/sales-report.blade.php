@@ -249,6 +249,14 @@
         <p style="font-size:0.75rem;color:#9ca3af;margin:0;">{{ now('Pacific/Tarawa')->format('d M Y') }}</p>
     </div>
 
+    @php $missingClosing = collect($cupData['cups'])->filter(fn($c) => $c['opening'] !== null && $c['closing'] === null); @endphp
+    @if($missingClosing->isNotEmpty() && now('Pacific/Tarawa')->hour >= 17)
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:0.5rem;padding:0.6rem 0.875rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+        <span style="font-size:1rem;">⚠️</span>
+        <span style="font-size:0.8rem;color:#92400e;font-weight:600;">Closing count not yet entered for: {{ $missingClosing->pluck('name')->join(', ') }}</span>
+    </div>
+    @endif
+
     @foreach($cupData['cups'] as $cup)
     <div style="border:1px solid #f3f4f6;border-radius:0.75rem;padding:1rem;margin-bottom:0.75rem;">
 
@@ -268,6 +276,8 @@
                 </div>
                 @if($cup['opening'] !== null)
                     <p style="font-size:0.7rem;color:#059669;margin:0.2rem 0 0;">✓ {{ $cup['opening'] }} saved{{ $cup['opening_by'] ? ' · ' . $cup['opening_by'] : '' }}</p>
+                @elseif($cup['carried'])
+                    <p style="font-size:0.7rem;color:#9ca3af;font-style:italic;margin:0.2rem 0 0;">From yesterday's closing — verify &amp; save</p>
                 @endif
             </div>
 

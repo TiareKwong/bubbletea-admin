@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Models\Flavor;
 use App\Models\Order;
+use App\Models\StockItem;
 use App\Models\Topping;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -46,6 +47,8 @@ class StatsOverviewWidget extends BaseWidget
             ])
             ->first();
 
+        $lowStockCount = StockItem::whereRaw('current_quantity <= min_quantity')->count();
+
         $needsAttention    = (int) ($orderCounts->needs_attention ?? 0);
         $pendingPayment    = (int) ($orderCounts->pending_payment ?? 0);
         $collectedToday    = (int) ($orderCounts->collected_today ?? 0);
@@ -83,6 +86,12 @@ class StatsOverviewWidget extends BaseWidget
                 ->descriptionIcon($outStockToppings > 0 ? 'heroicon-m-exclamation-circle' : 'heroicon-m-check-circle')
                 ->color($outStockToppings > 0 ? 'warning' : 'success')
                 ->url(route('filament.admin.resources.toppings.index')),
+
+            Stat::make('Low / Out of Stock', $lowStockCount)
+                ->description($lowStockCount > 0 ? 'Items need restocking' : 'All storage stock OK')
+                ->descriptionIcon($lowStockCount > 0 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-check-circle')
+                ->color($lowStockCount > 0 ? 'danger' : 'success')
+                ->url(route('filament.admin.resources.stock-items.index')),
         ];
     }
 }

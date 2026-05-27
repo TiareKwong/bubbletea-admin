@@ -40,7 +40,15 @@
       "Bash(flutter pub:*)",
       "Bash(flutter clean:*)",
       "Bash(xcrun simctl:*)",
-      "Bash(ideviceinfo -s 00008140-00114CA81A90801C)"
+      "Bash(ideviceinfo -s 00008140-00114CA81A90801C)",
+      "Bash(php -l app/Filament/Pages/SalesReport.php)",
+      "WebSearch",
+      "WebFetch(domain:help.loyverse.com)",
+      "Bash(php -l app/Filament/Resources/StockItemResource.php)",
+      "Bash(php -l app/Models/StockItem.php)",
+      "Bash(php -l app/Models/StockLog.php)",
+      "Bash(php -l app/Filament/Resources/StockCategoryResource.php)",
+      "Bash(php -l app/Notifications/LowStockAlert.php)"
     ]
   }
 }

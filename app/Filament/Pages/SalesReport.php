@@ -118,9 +118,10 @@ class SalesReport extends Page
 
     // ── Cup tracking ─────────────────────────────────────────────────
 
-    public array $cupOpening  = [];  // [cup_type_id => value]
-    public array $cupClosing  = [];  // [cup_type_id => value]
-    public array $cupTopupQty = [];  // [cup_type_id => pending input]
+    public array $cupOpening        = [];  // [cup_type_id => value]
+    public array $cupClosing        = [];  // [cup_type_id => value]
+    public array $cupTopupQty       = [];  // [cup_type_id => pending input]
+    public array $cupOpeningCarried = [];  // [cup_type_id => bool] pre-filled from yesterday
 
     private function activeCupTypesForBranch(): \Illuminate\Database\Eloquent\Collection
     {
@@ -132,17 +133,35 @@ class SalesReport extends Page
 
     private function loadCupLogs(): void
     {
-        $today    = now('Pacific/Tarawa')->toDateString();
-        $branchId = $this->branchId();
+        $today     = now('Pacific/Tarawa')->toDateString();
+        $yesterday = now('Pacific/Tarawa')->subDay()->toDateString();
+        $branchId  = $this->branchId();
 
         $logs = DailyCupLog::where('date', $today)
             ->where('branch_id', $branchId)
             ->get()
             ->keyBy('cup_type_id');
 
+        $yesterdayLogs = DailyCupLog::where('date', $yesterday)
+            ->where('branch_id', $branchId)
+            ->get()
+            ->keyBy('cup_type_id');
+
         foreach ($this->activeCupTypesForBranch() as $ct) {
-            $log = $logs->get($ct->id);
-            $this->cupOpening[$ct->id]  = $log?->opening !== null ? (string) $log->opening : '';
+            $log          = $logs->get($ct->id);
+            $yesterdayLog = $yesterdayLogs->get($ct->id);
+
+            if ($log?->opening !== null) {
+                $this->cupOpening[$ct->id]        = (string) $log->opening;
+                $this->cupOpeningCarried[$ct->id] = false;
+            } elseif ($yesterdayLog?->closing !== null) {
+                $this->cupOpening[$ct->id]        = (string) $yesterdayLog->closing;
+                $this->cupOpeningCarried[$ct->id] = true;
+            } else {
+                $this->cupOpening[$ct->id]        = '';
+                $this->cupOpeningCarried[$ct->id] = false;
+            }
+
             $this->cupClosing[$ct->id]  = $log?->closing !== null ? (string) $log->closing : '';
             $this->cupTopupQty[$ct->id] = '';
         }
@@ -233,6 +252,7 @@ class SalesReport extends Page
                 'topup_total' => $topupTotal,
                 'topups'      => $typeTopups->values()->toArray(),
                 'used'        => $used,
+                'carried'     => $this->cupOpeningCarried[$ct->id] ?? false,
             ];
         }
 
