@@ -3,8 +3,10 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\StockItemResource\Pages;
+use App\Filament\Resources\StockItemResource\RelationManagers\StockBatchesRelationManager;
 use App\Filament\Resources\StockItemResource\RelationManagers\StockLogsRelationManager;
 use App\Models\Branch;
+use App\Models\StockBatch;
 use App\Models\StockCategory;
 use App\Models\StockItem;
 use App\Models\StockLog;
@@ -17,10 +19,13 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use App\Notifications\LowStockAlert;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -39,17 +44,17 @@ class StockItemResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return (bool) auth()->user()?->is_admin;
+        return (bool) (auth()->user()?->is_admin || auth()->user()?->is_staff);
     }
 
     public static function canCreate(): bool
     {
-        return (bool) auth()->user()?->is_admin;
+        return (bool) (auth()->user()?->is_admin || auth()->user()?->is_staff);
     }
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return (bool) auth()->user()?->is_admin;
+        return (bool) (auth()->user()?->is_admin || auth()->user()?->is_staff);
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
@@ -73,22 +78,104 @@ class StockItemResource extends Resource
                 ->options(self::units()),
 
             TextInput::make('min_quantity')
-                ->label('Reorder Point')
-                ->helperText('Alert when stock falls to or below this number.')
+                ->label('Plane Reorder Point')
+                ->helperText('Order urgently by Plane when stock reaches this level.')
                 ->required()
                 ->numeric()
                 ->minValue(0)
                 ->step(0.01)
                 ->default(0),
 
-            DatePicker::make('nearest_expiry_date')
-                ->label('Nearest Expiry Date')
-                ->helperText('Update this whenever you receive new stock with an expiry date.')
-                ->nullable(),
+            TextInput::make('sea_reorder_quantity')
+                ->label('Sea Reorder Point')
+                ->helperText('Order by sea shipment when stock reaches this level.')
+                ->required()
+                ->numeric()
+                ->minValue(0)
+                ->step(0.01)
+                ->default(0),
 
             Textarea::make('notes')
                 ->rows(2)
                 ->nullable(),
+        ]);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make()
+                ->columns(3)
+                ->schema([
+                    TextEntry::make('name')
+                        ->label('Item')
+                        ->weight(FontWeight::Bold)
+                        ->columnSpan(2),
+
+                    TextEntry::make('category')
+                        ->label('Category')
+                        ->badge(),
+                ]),
+
+            Section::make()
+                ->columns(5)
+                ->schema([
+                    TextEntry::make('current_quantity')
+                        ->label('In Storage')
+                        ->formatStateUsing(fn ($state, StockItem $record) => rtrim(rtrim(number_format((float) $state, 2), '0'), '.') . ' ' . $record->unit)
+                        ->color(fn (StockItem $record) => match (true) {
+                            $record->isOutOfStock() => 'danger',
+                            $record->isLowStock()   => 'danger',
+                            $record->isOrderBySea() => 'warning',
+                            default                 => 'success',
+                        })
+                        ->weight(FontWeight::Bold),
+
+                    TextEntry::make('stock_status')
+                        ->label('Status')
+                        ->getStateUsing(fn (StockItem $record) => match (true) {
+                            $record->isOutOfStock() => 'Out of Stock',
+                            $record->isLowStock()   => 'Order by Plane',
+                            $record->isOrderBySea() => 'Order by Sea',
+                            default                 => 'In Stock',
+                        })
+                        ->badge()
+                        ->color(fn (string $state) => match ($state) {
+                            'Out of Stock'  => 'danger',
+                            'Order by Plane'  => 'danger',
+                            'Order by Sea'  => 'warning',
+                            default         => 'success',
+                        }),
+
+                    TextEntry::make('min_quantity')
+                        ->label('Plane Reorder At')
+                        ->formatStateUsing(fn ($state, StockItem $record) => rtrim(rtrim(number_format((float) $state, 2), '0'), '.') . ' ' . $record->unit)
+                        ->color('gray'),
+
+                    TextEntry::make('sea_reorder_quantity')
+                        ->label('Sea Reorder At')
+                        ->formatStateUsing(fn ($state, StockItem $record) => rtrim(rtrim(number_format((float) $state, 2), '0'), '.') . ' ' . $record->unit)
+                        ->color('gray'),
+
+                    TextEntry::make('nearest_expiry_date')
+                        ->label('Earliest Expiry')
+                        ->date('d M Y')
+                        ->placeholder('—')
+                        ->color(fn (StockItem $record) => match (true) {
+                            $record->nearest_expiry_date === null => null,
+                            $record->isExpired()                 => 'danger',
+                            $record->isExpiringSoon()            => 'warning',
+                            default                              => null,
+                        }),
+                ]),
+
+            Section::make()
+                ->schema([
+                    TextEntry::make('notes')
+                        ->label('Notes')
+                        ->placeholder('—'),
+                ])
+                ->hidden(fn (StockItem $record) => blank($record->notes)),
         ]);
     }
 
@@ -110,14 +197,15 @@ class StockItemResource extends Resource
                     ->formatStateUsing(fn ($state, StockItem $record) => rtrim(rtrim(number_format((float) $state, 2), '0'), '.') . ' ' . $record->unit)
                     ->color(fn (StockItem $record) => match (true) {
                         $record->isOutOfStock() => 'danger',
-                        $record->isLowStock()   => 'warning',
+                        $record->isLowStock()   => 'danger',
+                        $record->isOrderBySea() => 'warning',
                         default                 => 'success',
                     })
                     ->weight('bold')
                     ->sortable(),
 
                 TextColumn::make('min_quantity')
-                    ->label('Reorder At')
+                    ->label('Plane Reorder At')
                     ->formatStateUsing(fn ($state, StockItem $record) => rtrim(rtrim(number_format((float) $state, 2), '0'), '.') . ' ' . $record->unit)
                     ->color('gray'),
 
@@ -126,17 +214,19 @@ class StockItemResource extends Resource
                     ->badge()
                     ->getStateUsing(fn (StockItem $record) => match (true) {
                         $record->isOutOfStock() => 'Out of Stock',
-                        $record->isLowStock()   => 'Low Stock',
+                        $record->isLowStock()   => 'Order by Plane',
+                        $record->isOrderBySea() => 'Order by Sea',
                         default                 => 'In Stock',
                     })
                     ->color(fn (string $state) => match ($state) {
-                        'Out of Stock' => 'danger',
-                        'Low Stock'    => 'warning',
-                        default        => 'success',
+                        'Out of Stock'  => 'danger',
+                        'Order by Plane'  => 'danger',
+                        'Order by Sea'  => 'warning',
+                        default         => 'success',
                     }),
 
                 TextColumn::make('nearest_expiry_date')
-                    ->label('Expires')
+                    ->label('Earliest Expiry')
                     ->date('d M Y')
                     ->color(fn (StockItem $record) => match (true) {
                         $record->nearest_expiry_date === null => 'gray',
@@ -147,6 +237,7 @@ class StockItemResource extends Resource
                     ->placeholder('—'),
             ])
             ->defaultSort('name')
+            ->recordUrl(fn (StockItem $record) => self::getUrl('view', ['record' => $record]))
             ->filters([
                 SelectFilter::make('category')
                     ->options(self::categories()),
@@ -154,12 +245,15 @@ class StockItemResource extends Resource
                 SelectFilter::make('stock_status')
                     ->label('Status')
                     ->options([
-                        'low' => 'Low Stock',
+                        'dhl' => 'Order by Plane',
+                        'sea' => 'Order by Sea',
                         'out' => 'Out of Stock',
                     ])
                     ->query(function ($query, array $data) {
-                        if ($data['value'] === 'low') {
+                        if ($data['value'] === 'dhl') {
                             $query->whereRaw('current_quantity > 0 AND current_quantity <= min_quantity');
+                        } elseif ($data['value'] === 'sea') {
+                            $query->whereRaw('sea_reorder_quantity > 0 AND current_quantity > min_quantity AND current_quantity <= sea_reorder_quantity');
                         } elseif ($data['value'] === 'out') {
                             $query->where('current_quantity', '<=', 0);
                         }
@@ -187,15 +281,15 @@ class StockItemResource extends Resource
                             ->nullable(),
                     ])
                     ->action(function (StockItem $record, array $data): void {
-                        $record->increment('current_quantity', $data['quantity']);
-
-                        if (! empty($data['expiry_date'])) {
-                            $existing = $record->nearest_expiry_date;
-                            $incoming = \Carbon\Carbon::parse($data['expiry_date']);
-                            if ($existing === null || $incoming->lt($existing)) {
-                                $record->update(['nearest_expiry_date' => $incoming]);
-                            }
-                        }
+                        StockBatch::create([
+                            'stock_item_id'    => $record->id,
+                            'quantity'         => $data['quantity'],
+                            'initial_quantity' => $data['quantity'],
+                            'expiry_date'      => $data['expiry_date'] ?? null,
+                            'notes'            => $data['notes'] ?? null,
+                            'received_at'      => now(),
+                            'created_by'       => auth()->user()->getFilamentName(),
+                        ]);
 
                         StockLog::create([
                             'stock_item_id' => $record->id,
@@ -206,6 +300,7 @@ class StockItemResource extends Resource
                             'logged_at'     => now(),
                         ]);
 
+                        $record->syncFromBatches();
                         Notification::make()->title('Stock received')->success()->send();
                     }),
 
@@ -232,7 +327,17 @@ class StockItemResource extends Resource
                     ])
                     ->action(function (StockItem $record, array $data): void {
                         $before = (float) $record->current_quantity;
-                        $record->decrement('current_quantity', $data['quantity']);
+
+                        if ((float) $data['quantity'] > $before) {
+                            Notification::make()
+                                ->title('Not enough stock')
+                                ->body('Only ' . rtrim(rtrim(number_format($before, 2), '0'), '.') . ' ' . $record->unit . ' available.')
+                                ->danger()
+                                ->send();
+                            return;
+                        }
+
+                        self::deductFifo($record, (float) $data['quantity']);
 
                         StockLog::create([
                             'stock_item_id' => $record->id,
@@ -244,6 +349,7 @@ class StockItemResource extends Resource
                             'logged_at'     => now(),
                         ]);
 
+                        $record->syncFromBatches();
                         self::maybeSendLowStockAlert($record, $before);
                         Notification::make()->title('Stock dispatched to branch')->success()->send();
                     }),
@@ -267,7 +373,27 @@ class StockItemResource extends Resource
                                 ->nullable(),
                         ])
                         ->action(function (StockItem $record, array $data): void {
-                            $record->update(['current_quantity' => $data['quantity']]);
+                            $before = (float) $record->current_quantity;
+                            $newQty = (float) $data['quantity'];
+                            $diff   = $newQty - $before;
+
+                            if ($diff < 0) {
+                                self::deductFifo($record, abs($diff));
+                            } elseif ($diff > 0) {
+                                $latest = $record->activeBatches()->latest('received_at')->first();
+                                if ($latest) {
+                                    $latest->increment('quantity', $diff);
+                                } else {
+                                    StockBatch::create([
+                                        'stock_item_id'    => $record->id,
+                                        'quantity'         => $newQty,
+                                        'initial_quantity' => $newQty,
+                                        'expiry_date'      => null,
+                                        'received_at'      => now(),
+                                        'created_by'       => auth()->user()->getFilamentName(),
+                                    ]);
+                                }
+                            }
 
                             StockLog::create([
                                 'stock_item_id' => $record->id,
@@ -278,6 +404,8 @@ class StockItemResource extends Resource
                                 'logged_at'     => now(),
                             ]);
 
+                            $record->syncFromBatches();
+                            self::maybeSendLowStockAlert($record, $before);
                             Notification::make()->title('Stock recount saved')->success()->send();
                         }),
 
@@ -285,7 +413,23 @@ class StockItemResource extends Resource
                         ->label('Damaged')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
-                        ->form([
+                        ->form(fn (StockItem $record): array => [
+                            Select::make('batch_id')
+                                ->label('Batch')
+                                ->options(
+                                    $record->activeBatches()->get()
+                                        ->mapWithKeys(fn (StockBatch $batch) => [
+                                            $batch->id => ($batch->expiry_date
+                                                ? $batch->expiry_date->format('d M Y')
+                                                : 'No expiry date') .
+                                                ' — ' .
+                                                rtrim(rtrim(number_format((float) $batch->quantity, 2), '0'), '.') .
+                                                ' ' . $record->unit . ' remaining',
+                                        ])
+                                        ->toArray()
+                                )
+                                ->required(),
+
                             TextInput::make('quantity')
                                 ->label('Quantity Damaged')
                                 ->required()
@@ -298,8 +442,19 @@ class StockItemResource extends Resource
                                 ->nullable(),
                         ])
                         ->action(function (StockItem $record, array $data): void {
+                            $batch = StockBatch::find($data['batch_id']);
+
+                            if (! $batch || (float) $data['quantity'] > (float) $batch->quantity) {
+                                Notification::make()
+                                    ->title('Quantity exceeds batch stock')
+                                    ->body('This batch only has ' . rtrim(rtrim(number_format((float) ($batch?->quantity ?? 0), 2), '0'), '.') . ' ' . $record->unit . ' remaining.')
+                                    ->danger()
+                                    ->send();
+                                return;
+                            }
+
                             $before = (float) $record->current_quantity;
-                            $record->decrement('current_quantity', $data['quantity']);
+                            $batch->decrement('quantity', $data['quantity']);
 
                             StockLog::create([
                                 'stock_item_id' => $record->id,
@@ -310,6 +465,7 @@ class StockItemResource extends Resource
                                 'logged_at'     => now(),
                             ]);
 
+                            $record->syncFromBatches();
                             self::maybeSendLowStockAlert($record, $before);
                             Notification::make()->title('Damaged stock recorded')->warning()->send();
                         }),
@@ -318,7 +474,23 @@ class StockItemResource extends Resource
                         ->label('Expired')
                         ->icon('heroicon-o-clock')
                         ->color('warning')
-                        ->form([
+                        ->form(fn (StockItem $record): array => [
+                            Select::make('batch_id')
+                                ->label('Batch')
+                                ->options(
+                                    $record->activeBatches()->get()
+                                        ->mapWithKeys(fn (StockBatch $batch) => [
+                                            $batch->id => ($batch->expiry_date
+                                                ? $batch->expiry_date->format('d M Y')
+                                                : 'No expiry date') .
+                                                ' — ' .
+                                                rtrim(rtrim(number_format((float) $batch->quantity, 2), '0'), '.') .
+                                                ' ' . $record->unit . ' remaining',
+                                        ])
+                                        ->toArray()
+                                )
+                                ->required(),
+
                             TextInput::make('quantity')
                                 ->label('Quantity Expired')
                                 ->required()
@@ -331,9 +503,19 @@ class StockItemResource extends Resource
                                 ->nullable(),
                         ])
                         ->action(function (StockItem $record, array $data): void {
+                            $batch = StockBatch::find($data['batch_id']);
+
+                            if (! $batch || (float) $data['quantity'] > (float) $batch->quantity) {
+                                Notification::make()
+                                    ->title('Quantity exceeds batch stock')
+                                    ->body('This batch only has ' . rtrim(rtrim(number_format((float) ($batch?->quantity ?? 0), 2), '0'), '.') . ' ' . $record->unit . ' remaining.')
+                                    ->danger()
+                                    ->send();
+                                return;
+                            }
+
                             $before = (float) $record->current_quantity;
-                            $record->decrement('current_quantity', $data['quantity']);
-                            $record->update(['nearest_expiry_date' => null]);
+                            $batch->decrement('quantity', $data['quantity']);
 
                             StockLog::create([
                                 'stock_item_id' => $record->id,
@@ -344,20 +526,23 @@ class StockItemResource extends Resource
                                 'logged_at'     => now(),
                             ]);
 
+                            $record->syncFromBatches();
                             self::maybeSendLowStockAlert($record, $before);
                             Notification::make()->title('Expired stock removed')->warning()->send();
                         }),
 
                     EditAction::make(),
-                    DeleteAction::make(),
+                    DeleteAction::make()
+                        ->visible(fn () => (bool) auth()->user()?->is_admin),
                 ]),
             ]);
     }
 
-    public static function getRelationManagers(): array
+    public static function getRelations(): array
     {
         return [
             StockLogsRelationManager::class,
+            StockBatchesRelationManager::class,
         ];
     }
 
@@ -366,8 +551,21 @@ class StockItemResource extends Resource
         return [
             'index'  => Pages\ListStockItems::route('/'),
             'create' => Pages\CreateStockItem::route('/create'),
+            'view'   => Pages\ViewStockItem::route('/{record}'),
             'edit'   => Pages\EditStockItem::route('/{record}/edit'),
         ];
+    }
+
+    private static function deductFifo(StockItem $record, float $quantity): void
+    {
+        $remaining = $quantity;
+        foreach ($record->activeBatches()->get() as $batch) {
+            if ($remaining <= 0) break;
+            $batchQty  = (float) $batch->quantity;
+            $deduct    = min($batchQty, $remaining);
+            $batch->decrement('quantity', $deduct);
+            $remaining -= $deduct;
+        }
     }
 
     private static function maybeSendLowStockAlert(StockItem $record, float $quantityBefore): void
@@ -390,10 +588,14 @@ class StockItemResource extends Resource
     {
         return [
             'Bags'    => 'Bags',
+            'Bottles' => 'Bottles',
             'Boxes'   => 'Boxes',
+            'Drums'   => 'Drums',
             'Pieces'  => 'Pieces',
             'Sachets' => 'Sachets',
             'Rolls'   => 'Rolls',
+            'Sleeves' => 'Sleeves',
+            'Tubs'    => 'Tubs',
             'kg'      => 'kg',
             'Litres'  => 'Litres',
             'Other'   => 'Other',

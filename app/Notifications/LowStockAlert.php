@@ -21,11 +21,11 @@ class LowStockAlert extends Notification
         $min     = number_format((float) $item->min_quantity, 2);
         $status  = $item->current_quantity <= 0 ? 'Out of Stock' : 'Low Stock';
         $color   = $item->current_quantity <= 0 ? '#dc2626' : '#d97706';
-        $url     = config('app.url') . '/admin/stock-items/' . $item->id . '/edit';
+        $url     = config('app.url') . '/admin/stock-items/' . $item->id;
 
         return [
             'from'    => "Vicky's Bubble-Fruit Tea <noreply@vickysbubbletea.com>",
-            'to'      => ['charlie.hongkai@gmail.com'],
+            'to'      => ['vickys.bubble.tea@gmail.com'],
             'subject' => "[{$status}] {$item->name} needs restocking",
             'html'    => "
                 <div style='font-family:sans-serif;max-width:520px;margin:auto;'>

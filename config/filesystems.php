@@ -50,6 +50,7 @@ return [
         'droplet' => [
             'driver'     => 'local',
             'root'       => env('SFTP_ROOT', '/var/www/html'),
+            'url'        => env('SFTP_BASE_URL', ''),
             'visibility' => 'public',
             'throw'      => true,
         ],

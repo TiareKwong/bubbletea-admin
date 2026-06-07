@@ -48,7 +48,18 @@
       "Bash(php -l app/Models/StockItem.php)",
       "Bash(php -l app/Models/StockLog.php)",
       "Bash(php -l app/Filament/Resources/StockCategoryResource.php)",
-      "Bash(php -l app/Notifications/LowStockAlert.php)"
+      "Bash(php -l app/Notifications/LowStockAlert.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Filament/Resources/StockItemResource.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Filament/Resources/StockItemResource/Pages/ViewStockItem.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Models/StockBatch.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Models/StockItem.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Filament/Resources/StockItemResource/RelationManagers/StockBatchesRelationManager.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/database/migrations/2026_06_03_000000_create_stock_batches_table.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Notifications/ExpiringBatchAlert.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/routes/console.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Filament/Resources/StockItemResource/Pages/EditStockItem.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/database/migrations/2026_06_04_000000_add_sea_reorder_quantity_to_stock_items.php)",
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Filament/Resources/StockItemResource/RelationManagers/StockLogsRelationManager.php)"
     ]
   }
 }

@@ -112,6 +112,7 @@
     $prev       = $this->getComparisonSummary();
     $payments   = $this->getPaymentBreakdown();
     $flavors    = $this->getTopFlavors();
+    $toppings   = $this->getTopToppings();
     $expenses   = $this->getExpenseSummary();
     $float      = $this->getFloatSummary();
     $topups     = $this->getTopupSummary();
@@ -136,7 +137,8 @@
     $avgChange  = $pctChange($summary['avg_order_value'], $prev['avg_order_value']);
 
     $maxPayRev  = collect($payments)->max('revenue') ?: 1;
-    $maxFlavQty = collect($flavors)->max('qty') ?: 1;
+    $maxFlavQty     = collect($flavors)->max('qty') ?: 1;
+    $maxToppingQty  = collect($toppings)->max('qty') ?: 1;
 @endphp
 
 {{-- ── Summary cards ────────────────────────────────────────────── --}}
@@ -626,5 +628,30 @@
     </div>
 </div>
 
+{{-- ── Top Toppings ──────────────────────────────────────────────── --}}
+<div style="background:white;border:1px solid #e5e7eb;border-radius:0.875rem;padding:1.25rem;margin-bottom:1.25rem;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+    <p style="font-size:0.875rem;font-weight:700;color:#111827;margin:0 0 1rem;">Top Toppings</p>
+    @if(empty($toppings))
+        <p style="color:#9ca3af;font-size:0.875rem;">No topping data for this period.</p>
+    @else
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.75rem;">
+            @foreach($toppings as $i => $row)
+                @php $barPct = $maxToppingQty > 0 ? round(($row->qty / $maxToppingQty) * 100) : 0; @endphp
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <span style="width:1.25rem;text-align:center;font-size:0.7rem;font-weight:700;color:#9ca3af;flex-shrink:0;">{{ $i + 1 }}</span>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.2rem;">
+                            <span style="font-size:0.8rem;font-weight:600;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%;">{{ $row->name }}</span>
+                            <span style="font-size:0.75rem;color:#6b7280;flex-shrink:0;">{{ $row->qty }} orders</span>
+                        </div>
+                        <div style="background:#f3f4f6;border-radius:9999px;height:5px;width:100%;">
+                            <div style="background:#7c3aed;border-radius:9999px;height:5px;width:{{ $barPct }}%;"></div>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
+</div>
 
 </x-filament-panels::page>

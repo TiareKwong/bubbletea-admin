@@ -4,17 +4,16 @@ namespace App\Filament\Resources\StockItemResource\Pages;
 
 use App\Filament\Resources\StockItemResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use Filament\Resources\Pages\ViewRecord;
 
-class EditStockItem extends EditRecord
+class ViewStockItem extends ViewRecord
 {
     protected static string $resource = StockItemResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make()
-                ->visible(fn () => (bool) auth()->user()?->is_admin),
+            Actions\EditAction::make(),
         ];
     }
 }

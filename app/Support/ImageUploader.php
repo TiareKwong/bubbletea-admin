@@ -73,7 +73,7 @@ class ImageUploader
 
         Storage::disk('droplet')->put($remotePath, $compressed);
 
-        return rtrim(env('SFTP_BASE_URL'), '/') . '/' . $remotePath;
+        return rtrim(config('filesystems.disks.droplet.url'), '/') . '/' . $remotePath;
     }
 
     /**

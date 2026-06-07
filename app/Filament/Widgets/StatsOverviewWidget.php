@@ -23,12 +23,15 @@ class StatsOverviewWidget extends BaseWidget
 
     protected function getStats(): array
     {
-        // One query for all order status counts.
-        $orderCounts = Order::query()
+        $todayTarawa = now('Pacific/Tarawa')->toDateString();
+        $branchContext = app(\App\Services\BranchContext::class);
+
+        // One query for all order status counts, scoped to active branch and Tarawa date.
+        $orderCounts = $branchContext->applyTo(Order::query())
             ->select([
-                DB::raw("SUM(order_status IN ('Payment Verification','Points Verification')) AS needs_attention"),
+                DB::raw("SUM(order_status = 'Payment Verification') AS needs_attention"),
                 DB::raw("SUM(order_status = 'Pending Payment') AS pending_payment"),
-                DB::raw("SUM(collected = 1 AND DATE(updated_at) = CURDATE()) AS collected_today"),
+                DB::raw("SUM(collected = 1 AND DATE(CONVERT_TZ(updated_at, '+00:00', '+12:00')) = '{$todayTarawa}') AS collected_today"),
             ])
             ->first();
 
@@ -47,7 +50,7 @@ class StatsOverviewWidget extends BaseWidget
             ])
             ->first();
 
-        $lowStockCount = StockItem::whereRaw('current_quantity <= min_quantity')->count();
+        $lowStockCount = StockItem::whereRaw('current_quantity <= min_quantity AND min_quantity > 0')->count();
 
         $needsAttention    = (int) ($orderCounts->needs_attention ?? 0);
         $pendingPayment    = (int) ($orderCounts->pending_payment ?? 0);

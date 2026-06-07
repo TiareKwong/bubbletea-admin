@@ -41,7 +41,11 @@ class StockCategoryResource extends Resource
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return (bool) auth()->user()?->is_admin;
+        if (! (bool) auth()->user()?->is_admin) {
+            return false;
+        }
+
+        return $record->stockItems()->doesntExist();
     }
 
     public static function form(Schema $schema): Schema

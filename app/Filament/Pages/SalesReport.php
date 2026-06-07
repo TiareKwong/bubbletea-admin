@@ -482,6 +482,42 @@ class SalesReport extends Page
             ->toArray();
     }
 
+    public function getTopToppings(): array
+    {
+        [$from, $to] = $this->dateRange();
+
+        $q = DB::table('order_items')
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->whereBetween('orders.created_at', [$from, $to])
+            ->whereIn('orders.order_status', self::PAID_STATUSES)
+            ->whereNotNull('order_items.toppings')
+            ->where('order_items.toppings', '!=', '[]');
+
+        $branchId = $this->branchId();
+        if ($branchId) {
+            $q->where('orders.branch_id', $branchId);
+        }
+
+        $counts = [];
+        foreach ($q->pluck('order_items.toppings') as $json) {
+            foreach (json_decode($json, true) ?? [] as $t) {
+                $name = is_array($t) ? ($t['name'] ?? null) : $t;
+                if ($name) {
+                    $counts[ucfirst($name)] = ($counts[ucfirst($name)] ?? 0) + 1;
+                }
+            }
+        }
+
+        arsort($counts);
+        $top = array_slice($counts, 0, 10, true);
+
+        return array_map(
+            fn ($name, $qty) => (object) ['name' => $name, 'qty' => $qty],
+            array_keys($top),
+            array_values($top)
+        );
+    }
+
     public function getStatusBreakdown(): array
     {
         [$from, $to] = $this->dateRange();
@@ -879,6 +915,7 @@ class SalesReport extends Page
         $summary  = $this->getSummary();
         $payments = $this->getPaymentBreakdown();
         $flavors  = $this->getTopFlavors();
+        $toppings = $this->getTopToppings();
         $expenses = $this->getExpenseSummary();
         $topups   = $this->getTopupSummary();
 
@@ -900,6 +937,12 @@ class SalesReport extends Page
         $lines[] = 'Rank,Item,Qty Sold,Revenue';
         foreach ($flavors as $i => $r) {
             $lines[] = ($i + 1) . ',' . $r->name . ',' . $r->qty . ',A$' . number_format($r->revenue, 2);
+        }
+        $lines[] = '';
+        $lines[] = 'TOP TOPPINGS';
+        $lines[] = 'Rank,Topping,Orders';
+        foreach ($toppings as $i => $r) {
+            $lines[] = ($i + 1) . ',' . $r->name . ',' . $r->qty;
         }
         $lines[] = '';
         $lines[] = 'EXPENSES BY CATEGORY';
