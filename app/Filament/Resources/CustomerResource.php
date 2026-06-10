@@ -4,17 +4,20 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\CustomerResource\Pages;
 use App\Filament\Resources\CustomerResource\RelationManagers\OrdersRelationManager;
+use App\Filament\Resources\CustomerResource\RelationManagers\WalletTransactionsRelationManager;
 use App\Models\Reward;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\IconEntry;
+use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -54,25 +57,42 @@ class CustomerResource extends Resource
     {
         return $schema->components([
             Section::make('Personal Details')
-                ->columns(2)
+                ->columns(3)
                 ->schema([
-                    TextEntry::make('first_name')->label('First Name'),
-                    TextEntry::make('last_name')->label('Last Name'),
-                    TextEntry::make('email')->label('Email'),
-                    TextEntry::make('phone_number')->label('Phone')->placeholder('—'),
-                    TextEntry::make('birthday')->label('Birthday')->date()->placeholder('—'),
-                    TextEntry::make('created_at')->label('Member Since')->dateTime('d M Y, h:i A')->timezone('Pacific/Tarawa'),
-                    IconEntry::make('is_verified')->label('Email Verified')->boolean(),
+                    ImageEntry::make('avatar_url')
+                        ->label('Avatar')
+                        ->circular()
+                        ->defaultImageUrl(fn (User $record) => 'https://ui-avatars.com/api/?name=' . urlencode($record->full_name) . '&color=7E57C2&background=EDE7F6')
+                        ->columnSpan(1),
+
+                    Section::make()
+                        ->columnSpan(2)
+                        ->columns(2)
+                        ->schema([
+                            TextEntry::make('first_name')->label('First Name'),
+                            TextEntry::make('last_name')->label('Last Name'),
+                            TextEntry::make('email')->label('Email'),
+                            TextEntry::make('phone_number')->label('Phone')->placeholder('—'),
+                            TextEntry::make('birthday')->label('Birthday')->date()->placeholder('—'),
+                            TextEntry::make('created_at')->label('Member Since')->dateTime('d M Y, h:i A')->timezone('Pacific/Tarawa'),
+                            IconEntry::make('is_verified')->label('Email Verified')->boolean(),
+                        ]),
                 ]),
 
-            Section::make('Loyalty Points')
+            Section::make('Points & Wallet')
                 ->columns(2)
                 ->schema([
                     TextEntry::make('reward.points')
-                        ->label('Current Points')
+                        ->label('Loyalty Points')
                         ->default(0)
                         ->badge()
                         ->color('warning'),
+
+                    TextEntry::make('wallet_balance')
+                        ->label('Wallet Balance')
+                        ->formatStateUsing(fn ($state): string => 'A$' . number_format((float) $state, 2))
+                        ->badge()
+                        ->color('success'),
                 ]),
         ]);
     }
@@ -82,6 +102,11 @@ class CustomerResource extends Resource
         return $table
             ->searchOnBlur()
             ->columns([
+                ImageColumn::make('avatar_url')
+                    ->label('')
+                    ->circular()
+                    ->defaultImageUrl(fn (User $record) => 'https://ui-avatars.com/api/?name=' . urlencode($record->full_name) . '&color=7E57C2&background=EDE7F6'),
+
                 TextColumn::make('full_name')
                     ->label('Name')
                     ->searchable(query: fn (Builder $query, string $search) => $query->where(
@@ -103,6 +128,13 @@ class CustomerResource extends Resource
                     ->default(0)
                     ->badge()
                     ->color('warning')
+                    ->sortable(),
+
+                TextColumn::make('wallet_balance')
+                    ->label('Wallet')
+                    ->formatStateUsing(fn ($state): string => 'A$' . number_format((float) $state, 2))
+                    ->badge()
+                    ->color('success')
                     ->sortable(),
 
                 TextColumn::make('orders_count')
@@ -162,10 +194,11 @@ class CustomerResource extends Resource
             ->bulkActions([]);
     }
 
-    public static function getRelationManagers(): array
+    public static function getRelations(): array
     {
         return [
             OrdersRelationManager::class,
+            WalletTransactionsRelationManager::class,
         ];
     }
 

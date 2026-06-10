@@ -34,6 +34,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         'verification_token',
         'locale',
         'wallet_balance',
+        'avatar_url',
     ];
 
     protected $hidden = [
@@ -44,12 +45,13 @@ class User extends Authenticatable implements FilamentUser, HasName
     protected function casts(): array
     {
         return [
-            'password'    => 'hashed',
+            'password'       => 'hashed',
             'is_staff'       => 'boolean',
             'is_admin'       => 'boolean',
             'is_super_staff' => 'boolean',
             'is_verified'    => 'boolean',
-            'birthday'    => 'date',
+            'birthday'       => 'date',
+            'wallet_balance' => 'decimal:2',
         ];
     }
 
@@ -123,5 +125,10 @@ class User extends Authenticatable implements FilamentUser, HasName
     public function reward(): HasOne
     {
         return $this->hasOne(Reward::class);
+    }
+
+    public function walletTransactions(): HasMany
+    {
+        return $this->hasMany(WalletTransaction::class)->orderByDesc('created_at');
     }
 }
