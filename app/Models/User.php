@@ -35,6 +35,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         'locale',
         'wallet_balance',
         'avatar_url',
+        'hourly_rate',
     ];
 
     protected $hidden = [
@@ -52,6 +53,7 @@ class User extends Authenticatable implements FilamentUser, HasName
             'is_verified'    => 'boolean',
             'birthday'       => 'date',
             'wallet_balance' => 'decimal:2',
+            'hourly_rate'   => 'decimal:2',
         ];
     }
 
@@ -130,5 +132,20 @@ class User extends Authenticatable implements FilamentUser, HasName
     public function walletTransactions(): HasMany
     {
         return $this->hasMany(WalletTransaction::class)->orderByDesc('created_at');
+    }
+
+    public function timesheets(): HasMany
+    {
+        return $this->hasMany(Timesheet::class);
+    }
+
+    public function deductions(): HasMany
+    {
+        return $this->hasMany(StaffDeduction::class);
+    }
+
+    public function payRunEntries(): HasMany
+    {
+        return $this->hasMany(PayRunEntry::class);
     }
 }

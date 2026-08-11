@@ -107,6 +107,15 @@ class UserResource extends Resource
                     ->placeholder('— Select branch —')
                     ->helperText('Staff can only see data for their assigned branch. Leave blank for admins.')
                     ->columnSpanFull(),
+
+                TextInput::make('hourly_rate')
+                    ->label('Hourly Rate (A$)')
+                    ->numeric()
+                    ->prefix('A$')
+                    ->minValue(0)
+                    ->step(0.01)
+                    ->placeholder('e.g. 15.00')
+                    ->helperText('Used for payroll calculations.'),
             ]),
         ]);
     }

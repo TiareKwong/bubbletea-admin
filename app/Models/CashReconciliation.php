@@ -16,6 +16,7 @@ class CashReconciliation extends Model
         'submitted_by',
         'submitted_at',
         'branch_id',
+        'shift_staff_ids',
     ];
 
     protected function casts(): array
@@ -26,6 +27,7 @@ class CashReconciliation extends Model
             'actual_cash'         => 'decimal:2',
             'difference'          => 'decimal:2',
             'submitted_at'        => 'datetime',
+            'shift_staff_ids'     => 'array',
         ];
     }
 }

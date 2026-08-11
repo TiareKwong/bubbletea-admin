@@ -347,7 +347,6 @@ class ViewOrder extends ViewRecord
                     $this->refreshFormData(['order_status', 'updated_by']);
                 }),
 
-            // Mark Ready — all payment methods except Points
             Action::make('markReady')
                 ->label('Mark Ready')
                 ->icon('heroicon-o-bell')
@@ -355,8 +354,7 @@ class ViewOrder extends ViewRecord
                 ->visible(fn (): bool =>
                     $this->canActionOrder() &&
                     $this->record->order_status === 'Preparing' &&
-                    ! $this->record->collected &&
-                    $this->record->payment_method !== 'Points'
+                    ! $this->record->collected
                 )
                 ->requiresConfirmation()
                 ->modalHeading('Order Ready')

@@ -804,8 +804,7 @@ class OrderResource extends Resource
                     ->color('success')
                     ->visible(fn (Order $record): bool =>
                         $record->order_status === 'Preparing' &&
-                        ! $record->collected &&
-                        $record->payment_method !== 'Points'
+                        ! $record->collected
                     )
                     ->requiresConfirmation()
                     ->modalHeading('Order Ready')

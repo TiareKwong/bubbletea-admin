@@ -59,7 +59,8 @@
       "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/routes/console.php)",
       "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Filament/Resources/StockItemResource/Pages/EditStockItem.php)",
       "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/database/migrations/2026_06_04_000000_add_sea_reorder_quantity_to_stock_items.php)",
-      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Filament/Resources/StockItemResource/RelationManagers/StockLogsRelationManager.php)"
+      "Bash(php -l /Users/charliekwong/Documents/bubbletea-admin/app/Filament/Resources/StockItemResource/RelationManagers/StockLogsRelationManager.php)",
+      "Bash(git status *)"
     ]
   }
 }

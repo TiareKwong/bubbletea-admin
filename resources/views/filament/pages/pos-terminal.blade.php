@@ -309,6 +309,7 @@
             </div>
 
             <button wire:click="placeOrder" wire:loading.attr="disabled" wire:target="placeOrder"
+                x-data="{ busy: false }" x-on:click="busy = true" :disabled="busy"
                 style="width:100%;padding:0.75rem;border-radius:0.75rem;font-weight:700;font-size:0.875rem;border:none;cursor:{{ !empty($cart) ? 'pointer' : 'not-allowed' }};background:{{ !empty($cart) ? '#7c3aed' : '#e5e7eb' }};color:{{ !empty($cart) ? 'white' : '#9ca3af' }};box-shadow:0 1px 3px rgba(0,0,0,0.1);"
                 @if(empty($cart)) disabled @endif>
                 <span wire:loading.remove wire:target="placeOrder">💳 Charge ${{ number_format($finalTotal,2) }}</span>

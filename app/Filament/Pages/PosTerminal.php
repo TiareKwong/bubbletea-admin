@@ -261,24 +261,33 @@ class PosTerminal extends Page
         }
     }
 
+    public bool $isPlacingOrder = false;
+
     // ── Place order ───────────────────────────────────────────────────────────
 
     public function placeOrder(): void
     {
-        $this->errorMessage = null;
+        if ($this->isPlacingOrder) {
+            return;
+        }
+        $this->isPlacingOrder = true;
+        $this->errorMessage   = null;
 
         if (empty($this->cart)) {
-            $this->errorMessage = 'Cart is empty.';
+            $this->errorMessage   = 'Cart is empty.';
+            $this->isPlacingOrder = false;
             return;
         }
 
         if (! $this->selectedBranchId) {
-            $this->errorMessage = 'Please select a branch.';
+            $this->errorMessage   = 'Please select a branch.';
+            $this->isPlacingOrder = false;
             return;
         }
 
         if ($this->paymentMethod === 'Bank Transfer' && blank($this->paymentReference)) {
-            $this->errorMessage = 'Enter a bank transfer reference.';
+            $this->errorMessage   = 'Enter a bank transfer reference.';
+            $this->isPlacingOrder = false;
             return;
         }
 

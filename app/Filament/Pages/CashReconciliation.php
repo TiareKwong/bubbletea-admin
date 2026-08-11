@@ -2,14 +2,18 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\Branch;
 use App\Models\CashReconciliation as ReconciliationModel;
 use App\Models\DailyFloat;
 use App\Models\Expense;
 use App\Models\Order;
 use App\Models\ReimbursementPayment;
+use App\Models\StaffDeduction;
+use App\Models\User;
 use App\Models\WalletTopupRequest;
 use App\Models\WalletTransaction;
 use App\Services\BranchContext;
+use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 
@@ -53,6 +57,10 @@ class CashReconciliation extends Page
         'EFTPOS'        => '',
         'Bank Transfer' => '',
     ];
+
+    // Staff (user IDs) checked as on-shift for the Cash count currently
+    // being submitted — used to attribute/split a shortage deduction.
+    public array $cashShiftStaff = [];
 
     // Denomination counts for cash counting
     public array $denominations = [
@@ -114,8 +122,25 @@ class CashReconciliation extends Page
         $this->actualAmounts  = ['Cash' => '', 'EFTPOS' => '', 'Bank Transfer' => ''];
         $this->notes          = ['Cash' => '', 'EFTPOS' => '', 'Bank Transfer' => ''];
         $this->denominations  = array_fill_keys(array_keys(self::DENOMINATION_VALUES), '');
+        $this->cashShiftStaff = [];
         $this->loadFloat();
         $this->checkMissingDates();
+    }
+
+    public function getBranchStaffOptionsProperty(): array
+    {
+        // Not scoped to the current branch on purpose — staff sometimes
+        // cover a shift at a branch other than their assigned one, so
+        // whoever submits the reconciliation should be able to pick
+        // anyone who was actually on shift, not just that branch's roster.
+        return User::where('is_staff', true)
+            ->where('is_admin', false)
+            ->where('is_super_staff', false)
+            ->where('email', '!=', 'guest@internal.local')
+            ->orderBy('first_name')
+            ->get()
+            ->mapWithKeys(fn (User $u) => [$u->id => $u->full_name])
+            ->toArray();
     }
 
     private function loadFloat(): void
@@ -366,26 +391,201 @@ class CashReconciliation extends Page
             ->where('payment_method', $method)
             ->sum('actual_cash');
         $residualExpected = $totalExpected - $alreadyActual;
+        $difference       = $actual - $residualExpected;
 
-        ReconciliationModel::create([
+        $branchStaffAvailable = $method === 'Cash' && count($this->branchStaffOptions) > 0;
+
+        if ($branchStaffAvailable && $difference < 0 && empty($this->cashShiftStaff)) {
+            Notification::make()
+                ->title('Select who was on shift first')
+                ->body('This count is A$' . number_format(abs($difference), 2) . ' short. Check off which staff were on shift for this cash count before submitting — the shortage will be split between them.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $reconciliation = ReconciliationModel::create([
             'reconciliation_date' => $this->selectedDate,
             'payment_method'      => $method,
             'expected_cash'       => $residualExpected,
             'actual_cash'         => $actual,
-            'difference'          => $actual - $residualExpected,
+            'difference'          => $difference,
             'notes'               => $this->notes[$method] ?: null,
             'submitted_by'        => auth()->user()->getFilamentName(),
             'submitted_at'        => now('UTC'),
             'branch_id'           => $this->branchId(),
+            'shift_staff_ids'     => $method === 'Cash' ? array_values(array_unique(array_map('intval', $this->cashShiftStaff))) : null,
         ]);
 
         $this->actualAmounts[$method] = '';
         $this->notes[$method]         = '';
+        $this->cashShiftStaff         = [];
         if ($method === 'Cash') {
             $this->denominations = array_fill_keys(array_keys(self::DENOMINATION_VALUES), '');
         }
 
-        $label = $this->isBackfill() ? "$method reconciliation back-filled" : "$method reconciliation submitted";
-        Notification::make()->title($label)->success()->send();
+        // Shortage deductions are only finalized once the whole day is
+        // reconciled — a Cash short submitted now might get offset by an
+        // EFTPOS/Bank Transfer surplus submitted later the same day (e.g. a
+        // split payment the POS only recorded under one method).
+        $dayNote = $this->reconcileDayDeductions();
+
+        $label        = $this->isBackfill() ? "$method reconciliation back-filled" : "$method reconciliation submitted";
+        $notification = Notification::make()->title($label)->success();
+        if ($dayNote) {
+            $notification->body($dayNote);
+        }
+        $notification->send();
+    }
+
+    /**
+     * A method's residual can never reach zero once there's a genuine,
+     * confirmed shortfall (a "yes, that's really missing" submission still
+     * leaves a gap — that's the point of it), so "day closed" can't mean
+     * "residual paid off". It means every payment method with real activity
+     * that day has at least one submission — same notion as the "Day
+     * closed" badge already shown on this page.
+     */
+    private function isDayFullyReconciled(): bool
+    {
+        $methodTotals = $this->getMethodTotals();
+
+        foreach ($methodTotals as $method => $data) {
+            $hasActivity = $data['orders_count'] > 0 || $data['topup_total'] > 0 || $data['change_total'] > 0
+                || ($data['reimb_total'] ?? 0) > 0 || ($data['float_amount'] ?? 0) > 0;
+
+            if (! $hasActivity) {
+                continue;
+            }
+
+            $hasSubmission = $this->scopeReconQuery(ReconciliationModel::whereDate('reconciliation_date', $this->selectedDate))
+                ->where('payment_method', $method)
+                ->exists();
+
+            if (! $hasSubmission) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Recomputes shortage deductions for the selected date/branch from
+     * scratch: nets Cash shortfalls against EFTPOS/Bank Transfer surpluses
+     * (only surpluses offset — a shortfall in those methods never adds to
+     * the deduction) once every method with activity that day has been
+     * submitted. Idempotent — safe to call after every submission.
+     */
+    private function reconcileDayDeductions(): ?string
+    {
+        $branchId = $this->branchId();
+
+        $cashRows = ReconciliationModel::whereDate('reconciliation_date', $this->selectedDate)
+            ->where('branch_id', $branchId)
+            ->where('payment_method', 'Cash')
+            ->get();
+
+        $cashReconciliationIds = $cashRows->pluck('id')->toArray();
+
+        // Always clear out previously auto-created deductions for this day
+        // first — the recompute below is the single source of truth.
+        StaffDeduction::where('source', 'cash_short')
+            ->whereIn('cash_reconciliation_id', $cashReconciliationIds ?: [0])
+            ->delete();
+
+        if (! $this->isDayFullyReconciled()) {
+            return null;
+        }
+
+        // Net variance per method must be computed as (total actual submitted
+        // − total expected), NOT by summing each row's stored `difference` —
+        // when a method has multiple incremental submissions, each row's
+        // `difference` is measured against a shrinking residual, so summing
+        // them overstates the real shortfall.
+        $methodTotals = $this->getMethodTotals();
+
+        $cashNet = (float) $cashRows->sum('actual_cash') - $methodTotals['Cash']['expected'];
+
+        if ($cashNet >= 0) {
+            return 'Day fully reconciled — no shortage to deduct.';
+        }
+
+        $otherSurplus = 0.0;
+        foreach (['EFTPOS', 'Bank Transfer'] as $otherMethod) {
+            $actualSum = (float) ReconciliationModel::whereDate('reconciliation_date', $this->selectedDate)
+                ->where('branch_id', $branchId)
+                ->where('payment_method', $otherMethod)
+                ->sum('actual_cash');
+
+            $net = $actualSum - $methodTotals[$otherMethod]['expected'];
+
+            if ($net > 0) {
+                $otherSurplus += $net;
+            }
+        }
+
+        $deductible = round(max(0.0, abs($cashNet) - $otherSurplus), 2);
+
+        if ($deductible <= 0) {
+            return 'Cash was short but fully offset by surpluses on other payment methods today — no deduction.';
+        }
+
+        $staffIds = collect($cashRows)
+            ->flatMap(fn (ReconciliationModel $r) => $r->shift_staff_ids ?? [])
+            ->unique()
+            ->values()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (empty($staffIds)) {
+            return 'A$' . number_format($deductible, 2) . ' net shortage today, but no staff were recorded as on shift — not attributed to anyone.';
+        }
+
+        $latestCashReconciliationId = $cashRows->sortByDesc('id')->first()?->id;
+
+        return $this->createShortageDeductions($staffIds, $deductible, $latestCashReconciliationId, $otherSurplus);
+    }
+
+    /**
+     * Splits a net shortage evenly (to the cent) across the given staff,
+     * creating one StaffDeduction each. Returns a human-readable summary
+     * for the submission notification.
+     */
+    private function createShortageDeductions(array $staffIds, float $deductible, ?int $cashReconciliationId, float $offsetByOtherMethods): string
+    {
+        $staff  = User::whereIn('id', $staffIds)->get()->keyBy('id');
+        $branch = $this->branchId() ? Branch::find($this->branchId()) : null;
+
+        $n           = count($staffIds);
+        $totalCents  = (int) round($deductible * 100);
+        $baseCents   = intdiv($totalCents, $n);
+        $remainder   = $totalCents % $n;
+        $submittedBy = auth()->user()->getFilamentName();
+
+        $reasonPrefix = 'Cash short — ' . ($branch?->name ?? 'Branch') . ', ' . Carbon::parse($this->selectedDate)->format('d M Y');
+        if ($offsetByOtherMethods > 0) {
+            $reasonPrefix .= ' (net of A$' . number_format($offsetByOtherMethods, 2) . ' surplus on other methods)';
+        }
+
+        $names = [];
+        foreach ($staffIds as $i => $userId) {
+            $cents  = $baseCents + ($i < $remainder ? 1 : 0);
+            $amount = $cents / 100;
+
+            StaffDeduction::create([
+                'user_id'                => $userId,
+                'date'                   => $this->selectedDate,
+                'amount'                 => $amount,
+                'reason'                 => $reasonPrefix,
+                'source'                 => 'cash_short',
+                'cash_reconciliation_id' => $cashReconciliationId,
+                'created_by'             => $submittedBy,
+            ]);
+
+            $names[] = ($staff->get($userId)?->full_name ?? 'Unknown') . ' (A$' . number_format($amount, 2) . ')';
+        }
+
+        return 'A$' . number_format($deductible, 2) . ' net shortage added as a deduction — ' . implode(', ', $names) . '.';
     }
 }

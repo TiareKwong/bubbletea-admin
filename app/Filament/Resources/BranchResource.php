@@ -4,7 +4,9 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\BranchResource\Pages;
 use App\Models\Branch;
+use App\Models\User;
 use Filament\Resources\Resource;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -83,7 +85,39 @@ class BranchResource extends Resource
                 ->reorderable()
                 ->collapsible()
                 ->nullable(),
+
+            CheckboxList::make('staff_ids')
+                ->label('Staff')
+                ->helperText('Choose who currently works at this branch. Unchecking someone removes them from this branch (they become unassigned, not deleted).')
+                ->options(
+                    User::where('is_staff', true)
+                        ->where('is_admin', false)
+                        ->where('is_super_staff', false)
+                        ->where('email', '!=', 'guest@internal.local')
+                        ->orderBy('first_name')
+                        ->get()
+                        ->mapWithKeys(fn (User $u) => [$u->id => $u->full_name])
+                )
+                ->searchable()
+                ->bulkToggleable()
+                ->columnSpanFull(),
         ]);
+    }
+
+    /**
+     * Syncs which staff belong to a branch from the CheckboxList above.
+     * Checked staff get moved into this branch; anyone previously in this
+     * branch but no longer checked is unassigned (branch_id = null).
+     */
+    public static function syncBranchStaff(Branch $branch, array $staffIds): void
+    {
+        if (! empty($staffIds)) {
+            User::whereIn('id', $staffIds)->update(['branch_id' => $branch->id]);
+        }
+
+        User::where('branch_id', $branch->id)
+            ->whereNotIn('id', $staffIds)
+            ->update(['branch_id' => null]);
     }
 
     public static function table(Table $table): Table

@@ -333,6 +333,25 @@
                         <input type="text" readonly value="A${{ number_format($cashTotal, 2) }}"
                             style="width:100%;border:1px solid #c4b5fd;border-radius:0.5rem;padding:0.5rem 0.75rem;font-size:1rem;font-weight:700;color:#5b21b6;background:#f5f3ff;outline:none;cursor:default;" />
                     </div>
+
+                    {{-- Who was on shift (for shortage attribution) --}}
+                    @php $branchStaffOptions = $this->branchStaffOptions; @endphp
+                    <div style="margin-bottom:0.75rem;">
+                        <label style="display:block;font-size:0.8rem;font-weight:600;color:#374151;margin-bottom:0.35rem;">Who was on shift for this cash count?</label>
+                        @if(count($branchStaffOptions))
+                            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+                                @foreach($branchStaffOptions as $staffId => $staffName)
+                                    <label style="display:flex;align-items:center;gap:0.35rem;background:#fff;border:1px solid #d1d5db;border-radius:0.5rem;padding:0.35rem 0.65rem;font-size:0.8rem;color:#374151;cursor:pointer;">
+                                        <input type="checkbox" wire:model.live="cashShiftStaff" value="{{ $staffId }}">
+                                        {{ $staffName }}
+                                    </label>
+                                @endforeach
+                            </div>
+                            <p style="font-size:0.72rem;color:#9ca3af;margin:0.35rem 0 0;">If this count is short, the shortage is split evenly between everyone checked and deducted from their pay.</p>
+                        @else
+                            <p style="font-size:0.78rem;color:#9ca3af;margin:0;">No staff found — a shortage here won't be attributed to anyone.</p>
+                        @endif
+                    </div>
                 @else
                     <div style="margin-bottom:0.75rem;">
                         <label style="display:block;font-size:0.8rem;font-weight:600;color:#374151;margin-bottom:0.35rem;">Actual Amount (A$)</label>
